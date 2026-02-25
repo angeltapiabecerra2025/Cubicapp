@@ -193,23 +193,39 @@ const Actividades = () => {
                         <div className="modal-body scrollable">
                             <div className="form-section">
                                 <h4 className="section-title">Datos Principales</h4>
-                                <div className="form-group">
-                                    <label>Nombre de la Actividad</label>
-                                    <input
-                                        type="text"
-                                        value={modal.data.nombre}
-                                        onChange={(e) => setModal({ ...modal, data: { ...modal.data, nombre: e.target.value } })}
-                                        placeholder="Ej: Albañilería"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>Descripción</label>
-                                    <textarea
-                                        rows="2"
-                                        value={modal.data.descripcion}
-                                        onChange={(e) => setModal({ ...modal, data: { ...modal.data, descripcion: e.target.value } })}
-                                        placeholder="Detalle de los trabajos incluidos..."
-                                    />
+                                <div className="form-grid-3">
+                                    <div className="form-group">
+                                        <label>Nombre de la Actividad</label>
+                                        <input
+                                            type="text"
+                                            value={modal.data.nombre}
+                                            onChange={(e) => setModal({ ...modal, data: { ...modal.data, nombre: e.target.value } })}
+                                            placeholder="Ej: Albañilería"
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Descripción</label>
+                                        <input
+                                            type="text"
+                                            value={modal.data.descripcion}
+                                            onChange={(e) => setModal({ ...modal, data: { ...modal.data, descripcion: e.target.value } })}
+                                            placeholder="Detalle breve..."
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Especialidad Correspondiente</label>
+                                        <select
+                                            className="custom-select"
+                                            value={modal.data.especialidadId || ""}
+                                            onChange={(e) => setModal({ ...modal, data: { ...modal.data, especialidadId: e.target.value } })}
+                                        >
+                                            <option value="">Seleccionar especialidad...</option>
+                                            <option value="1">Electricidad</option>
+                                            <option value="2">Climatización</option>
+                                            <option value="3">Gasfitería</option>
+                                            <option value="4">Obras Civiles</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
 
@@ -464,6 +480,23 @@ const Actividades = () => {
                 .form-group input:focus, .form-group textarea:focus {
                     border-color: #2563eb;
                     ring: 2px solid #bfdbfe;
+                }
+                
+                .form-grid-3 {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 1rem;
+                }
+
+                .custom-select {
+                    width: 100%;
+                    padding: 0.75rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 0.5rem;
+                    font-size: 0.875rem;
+                    outline: none;
+                    background-color: white;
+                    cursor: pointer;
                 }
                 
                 /* Confirm Dialog Specific */

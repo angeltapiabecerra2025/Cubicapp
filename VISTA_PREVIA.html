@@ -512,7 +512,7 @@
                                                 <button class="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-700" onClick={handleSaveAct}>Guardar Actividad</button>
                                             </div>
                                             <div class="space-y-4 mb-8">
-                                                <div class="grid grid-cols-2 gap-4">
+                                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                     <div>
                                                         <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Nombre</label>
                                                         <input class="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={formAct.nombre} onChange={e => setFormAct({ ...formAct, nombre: e.target.value })} placeholder="Ej: Hormigón" />
@@ -520,6 +520,15 @@
                                                     <div>
                                                         <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Descripción</label>
                                                         <input class="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={formAct.desc} onChange={e => setFormAct({ ...formAct, desc: e.target.value })} placeholder="Breve detalle..." />
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Especialidad</label>
+                                                        <select class="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-bold text-blue-600" value={formAct.especialidadId || ""} onChange={e => setFormAct({ ...formAct, especialidadId: e.target.value })}>
+                                                            <option value="">Seleccionar...</option>
+                                                            {especialidadesInternas.map(esp => (
+                                                                <option key={esp.id} value={esp.id}>{esp.nombre}</option>
+                                                            ))}
+                                                        </select>
                                                     </div>
                                                 </div>
 
@@ -585,7 +594,16 @@
                                                 <tbody class="divide-y divide-slate-50">
                                                     {actividadesInternas.map(d => (
                                                         <tr key={d.id} class="hover:bg-slate-50 transition-colors">
-                                                            <td class="p-4 px-6 text-sm font-bold text-slate-800">{d.nombre}</td>
+                                                            <td class="p-4 px-6">
+                                                                <div class="flex flex-col">
+                                                                    <span class="text-sm font-bold text-slate-800">{d.nombre}</span>
+                                                                    {d.especialidadId && (
+                                                                        <span class="text-[9px] font-extrabold text-blue-600 uppercase tracking-tight">
+                                                                            {especialidadesInternas.find(e => e.id == d.especialidadId)?.nombre}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
                                                             <td class="p-4 px-6 text-sm text-slate-500">{d.desc}</td>
                                                             <td class="p-4 px-6 text-right space-x-3">
                                                                 <button class="text-blue-600 hover:text-blue-800 text-sm" title="Editar" onClick={() => { setShowForm(true); setFormAct(d); }}><Icon name="edit" /></button>
