@@ -1261,8 +1261,8 @@
 
                 const reader = new FileReader();
                 reader.onload = (evt) => {
-                    const bstr = evt.target.result;
-                    const wb = XLSX.read(bstr, {type:'binary'});
+                    const dataArr = new Uint8Array(evt.target.result);
+                    const wb = XLSX.read(dataArr, {type:'array'});
                     const wsname = wb.SheetNames[0];
                     const ws = wb.Sheets[wsname];
                     const data = XLSX.utils.sheet_to_json(ws, {header: 1});
@@ -1326,14 +1326,14 @@
                     if (newRows.length > 0) {
                         const currentValidRows = rows.filter(r => !isEmptyRow(r));
                         const combined = [...currentValidRows, ...newRows];
-                        setRows(padRowsTo100(combined, actId, unitId));
+                        setRows(combined);
                         alert(`✅ Se importaron ${newRows.length} filas correctamente.`);
                     } else {
                         alert('No se encontraron filas válidas para importar.');
                     }
                     e.target.value = null; 
                 };
-                reader.readAsBinaryString(file);
+                reader.readAsArrayBuffer(file);
             };
 
             const [formData, setFormData] = useState({
@@ -1953,9 +1953,11 @@
                                         <button class="bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-green-800 flex items-center gap-1.5 transition-colors shadow-md" onClick={exportToExcel}>
                                             <span>📊</span> Exportar Excel
                                         </button>
-                                        <button id="btn-export-pdf" class="bg-red-600 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-red-700 flex items-center gap-1.5 transition-colors shadow-md" onClick={exportToPDF}>
-                                            <span>📄</span> Exportar PDF
-                                        </button>
+                                        {activeTab === 'edp' && (
+                                            <button id="btn-export-pdf" class="bg-red-600 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-red-700 flex items-center gap-1.5 transition-colors shadow-md" onClick={exportToPDF}>
+                                                <span>📄</span> Exportar PDF
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -3176,7 +3178,10 @@
                         )}
                         <div class="p-8 flex items-center gap-3">
                             <span class="text-blue-500 text-3xl font-bold">📐</span>
-                            <span class="text-xl font-extrabold tracking-tight">CUBICAPP</span>
+                            <div>
+                                <span class="text-xl font-extrabold tracking-tight block">CUBICAPP</span>
+                                <span class="text-[9px] font-bold text-blue-400/60 uppercase tracking-widest">v1.1 Stable</span>
+                            </div>
                         </div>
                         <nav class="flex-1 px-4">
                             <p class="text-[10px] font-bold text-slate-500 mb-4 px-4 tracking-widest uppercase">Menú Principal</p>
