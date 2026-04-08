@@ -1710,17 +1710,29 @@
                 return parseFloat(sub?.porcentaje) || 0;
             };
 
-            const calculatePhysicalProgress = (row, act) => {
+            const calculatePhysicalProgress = (row, act, excludeProtocolo = false) => {
                 if (!act || !act.subActividades || act.subActividades.length === 0) return 0;
                 const fisicaData = row.subActivityProgress || {};
                 const allSubs = act.subActividades;
                 let totalPhysical = 0;
+                let weightSum = 0;
+
                 allSubs.forEach(sub => {
+                    const isProt = (sub.nombre || '').toLowerCase().includes('protocolo');
+                    if (excludeProtocolo && isProt) return;
+
                     const weight = parseFloat(sub.porcentaje) || 0;
                     if (weight <= 0) return;
+                    
                     const qty = parseFloat(fisicaData[sub.id]) || 0;
                     totalPhysical += qty * weight / 100;
+                    weightSum += weight;
                 });
+                
+                if (excludeProtocolo && weightSum > 0) {
+                    // Normalizar al 100% de las tareas no-protocolo
+                    return (totalPhysical / weightSum) * 100;
+                }
                 return totalPhysical;
             };
 
@@ -1753,8 +1765,9 @@
                         const isProtocolo = g.name.toLowerCase().includes('protocolo');
                         
                         if (isProtocolo) {
-                            // Lógica Protocolo: Solo si físico >= 90% y es manual
-                            if (physicalP >= 90) {
+                            // Lógica Protocolo: Solo si físico base (no protocolo) == 100%
+                            const physicalBaseP = calculatePhysicalProgress(row, act, true);
+                            if (physicalBaseP >= 99.9) { // Tolerar redondeo
                                 const manualVal = parseFloat(edpData[g.subs[0].id]) || 0;
                                 totalExecuted += manualVal * g.weight / 100;
                             }
@@ -1824,10 +1837,11 @@
                                     const isProtocolo = g.name.toLowerCase().includes('protocolo');
                                     
                                     if (isProtocolo) {
-                                        const isEnabled = physicalP >= 90;
+                                        const physicalBaseP = calculatePhysicalProgress(row, act, true);
+                                        const isEnabled = physicalBaseP >= 99.9; 
                                         return (
                                             <div key={g.name} class={`flex-1 min-w-[110px] p-1 flex flex-col items-center justify-center gap-0.5 ${idx < activeGroups.length - 1 ? 'border-r border-amber-100' : ''} ${isEnabled ? 'bg-emerald-50' : 'bg-slate-100 opacity-60'}`}>
-                                                {!isEnabled && <span class="text-[8px] font-bold text-slate-400 uppercase">Bloq. &lt; 90%</span>}
+                                                {!isEnabled && <span class="text-[8px] font-bold text-slate-400 uppercase">Bloq. &lt; 100% Fís.</span>}
                                                 <input
                                                     type="number"
                                                     disabled={!isEnabled}
