@@ -1712,6 +1712,7 @@
 
             const calculatePhysicalProgress = (row, act, excludeProtocolo = false) => {
                 if (!act || !act.subActividades || act.subActividades.length === 0) return 0;
+                const takeoff = calculateTakeoff(row);
                 const fisicaData = row.subActivityProgress || {};
                 const allSubs = act.subActividades;
                 let totalPhysical = 0;
@@ -1729,9 +1730,10 @@
                     weightSum += weight;
                 });
                 
-                if (excludeProtocolo && weightSum > 0) {
-                    // Normalizar al 100% de las tareas no-protocolo
-                    return (totalPhysical / weightSum) * 100;
+                if (excludeProtocolo) {
+                    if (weightSum <= 0 || takeoff <= 0) return 0;
+                    const expected = (weightSum / 100) * takeoff;
+                    return (totalPhysical / expected) * 100;
                 }
                 return totalPhysical;
             };
