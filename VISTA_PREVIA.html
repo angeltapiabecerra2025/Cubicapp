@@ -1756,7 +1756,7 @@
                     const groupsMap = {};
                     allSubs.forEach(s => {
                         const gName = (s.grupoEDP || s.nombre || '').trim();
-                        if (!groupsMap[gName]) groupsMap[gName] = { weight: 0, subs: [] };
+                        if (!groupsMap[gName]) groupsMap[gName] = { name: gName, weight: 0, subs: [] };
                         groupsMap[gName].weight += (parseFloat(s.porcentajeEDP) || 0);
                         groupsMap[gName].subs.push(s);
                     });
