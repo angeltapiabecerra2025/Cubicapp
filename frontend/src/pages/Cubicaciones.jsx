@@ -19,7 +19,7 @@ const Cubicaciones = () => (
         <h3>Módulo de Cubicaciones (Core)</h3>
         <p>Seleccione una obra y partida para comenzar el ingreso de datos.</p>
         <div className="placeholder-info">
-          Aquí se implementará el motor de cálculo dinámico con las columnas: Eje, Tramo, Largo, Ancho, Alto y Factor de Pérdida.
+          Aquí se implementará el motor de cálculo dinámico con las columnas: Eje, Tramo, Largo, Ancho, Alto y Cantidad.
         </div>
       </div>
     </div>
