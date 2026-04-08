@@ -2844,6 +2844,46 @@
                 setItemizadosPorProyecto(prev => ({ ...prev, [projectId]: list }));
             };
 
+            const handleExportDB = () => {
+                const keys = ['app_itemizados', 'app_unidades', 'app_actividades', 'app_usuarios', 'app_roles', 'app_proyectos', 'app_especialidades', 'app_cubicaciones_rows', 'app_cubicaciones_columns'];
+                const data = {};
+                keys.forEach(key => {
+                    data[key] = JSON.parse(localStorage.getItem(key) || 'null');
+                });
+                
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `cubicapp_backup_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            const handleImportDB = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        Object.keys(data).forEach(key => {
+                            if (data[key] !== null) {
+                                localStorage.setItem(key, JSON.stringify(data[key]));
+                            }
+                        });
+                        alert('✅ Configuración importada correctamente. Reiniciando aplicación...');
+                        window.location.reload();
+                    } catch (error) {
+                        alert('⚠️ Error al leer el archivo. Asegúrate de que es un archivo JSON de respaldo válido.');
+                    }
+                };
+                reader.readAsText(file);
+                if(e.target) e.target.value = '';
+            };
+
             const [unidadesInternas, setUnidadesInternas] = useLocalStorageState('app_unidades', [
                 { id: 1, name: 'Metro Cúbico', abrev: 'm3', formula: 'largo * ancho * alto', params: ['largo', 'ancho', 'alto'] },
                 { id: 2, name: 'Metro Cuadrado', abrev: 'm2', formula: 'largo * ancho', params: ['largo', 'ancho'] }
@@ -3279,11 +3319,19 @@
 
                     {/* Main Content */}
                     <main class="ml-64 flex-1 flex flex-col">
-                        <header class="bg-white border-b border-slate-200 px-10 py-6 flex justify-between items-center sticky top-0">
+                        <header class="bg-white border-b border-slate-200 px-10 py-6 flex justify-between items-center sticky top-0 z-[60]">
                             <h1 class="text-2xl font-bold text-slate-800">
                                 {page === 'Unidades' ? 'Unidades de Medida' : page === 'Actividades' ? 'Actividades' : page === 'Especialidades' ? 'Especialidades' : page === 'Usuarios' ? 'Usuarios' : page === 'Roles' ? 'Roles de Sistema' : page === 'Proyectos' ? 'Mantenedor de Proyectos' : page === 'Planificacion' ? 'Planificación' : page === 'MatrizMC' ? 'Matriz MC' : page === 'LogAdicionales' ? '📋 LOG de Adicionales' : page}
                             </h1>
-
+                            <div class="flex items-center gap-3">
+                                <button class="bg-slate-50 hover:bg-slate-100 text-slate-600 px-4 py-2 rounded-lg text-xs font-bold border border-slate-200 transition-colors shadow-sm flex items-center gap-2" onClick={handleExportDB}>
+                                    <span>📥</span> Exportar Data
+                                </button>
+                                <label class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center gap-2 cursor-pointer">
+                                    <span>📤</span> Importar Data
+                                    <input type="file" accept=".json" class="hidden" onChange={handleImportDB} />
+                                </label>
+                            </div>
                         </header>
 
                         <div class={`py-4 md:py-6 ${['Partidas', 'Gantt'].includes(page) ? 'px-2 md:px-4 max-w-none' : page === 'Cubicaciones' ? 'px-4 md:px-6 max-w-[1600px] mx-auto' : 'px-4 md:px-8 max-w-7xl mx-auto'}`}>
