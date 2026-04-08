@@ -1713,12 +1713,13 @@
             const calculatePhysicalProgress = (row, act, excludeProtocolo = false) => {
                 if (!act || !act.subActividades || act.subActividades.length === 0) return 0;
                 const takeoff = calculateTakeoff(row);
-                const fisicaData = row.subActivityProgress || {};
-                const allSubs = act.subActividades;
+                const fisicaData = row?.subActivityProgress || {};
+                const allSubs = act.subActividades || [];
                 let totalPhysical = 0;
                 let weightSum = 0;
 
                 allSubs.forEach(sub => {
+                    if (!sub) return;
                     const isProt = (sub.nombre || '').toLowerCase().includes('protocolo');
                     if (excludeProtocolo && isProt) return;
 
@@ -1733,6 +1734,7 @@
                 if (excludeProtocolo) {
                     if (weightSum <= 0 || takeoff <= 0) return 0;
                     const expected = (weightSum / 100) * takeoff;
+                    if (expected <= 0) return 0;
                     return (totalPhysical / expected) * 100;
                 }
                 return totalPhysical;
@@ -1764,19 +1766,20 @@
                     Object.values(groupsMap).forEach(g => {
                         if (g.weight <= 0) return;
                         
-                        const isProtocolo = g.name.toLowerCase().includes('protocolo');
+                        const isProtocolo = (g.name || '').toLowerCase().includes('protocolo');
                         
                         if (isProtocolo) {
                             // Lógica Protocolo: Solo si físico base (no protocolo) == 100%
                             const physicalBaseP = calculatePhysicalProgress(row, act, true);
-                            if (physicalBaseP >= 99.9) { // Tolerar redondeo
-                                const manualVal = parseFloat(edpData[g.subs[0].id]) || 0;
+                            if (physicalBaseP >= 99.9) { 
+                                const subId = g.subs && g.subs[0] ? g.subs[0].id : null;
+                                const manualVal = subId ? (parseFloat(edpData[subId]) || 0) : 0;
                                 totalExecuted += manualVal * g.weight / 100;
                             }
                         } else {
                             // Lógica estricta: El avance EDP solo cuenta si TODAS las sub-actividades físicas del grupo tienen avance
                             const fyzVals = g.subs.map(s => parseFloat(fisicaData[s.id]) || 0);
-                            const allHaveProgress = fyzVals.every(v => v > 0);
+                            const allHaveProgress = fyzVals.length > 0 && fyzVals.every(v => v > 0);
                             
                             if (allHaveProgress) {
                                 const avg = fyzVals.reduce((a, b) => a + b, 0) / fyzVals.length;
@@ -1836,34 +1839,35 @@
                         <td class="p-0 border border-slate-200 bg-amber-50/10" colSpan={maxSubs}>
                             <div class="flex h-full min-h-[48px]">
                                 {activeGroups.map((g, idx) => {
-                                    const isProtocolo = g.name.toLowerCase().includes('protocolo');
-                                    
+                                    const isProtocolo = (g.name || '').toLowerCase().includes('protocolo');
+                                    const firstSubId = g.subs && g.subs[0] ? g.subs[0].id : null;
+
                                     if (isProtocolo) {
                                         const physicalBaseP = calculatePhysicalProgress(row, act, true);
                                         const isEnabled = physicalBaseP >= 99.9; 
                                         return (
-                                            <div key={g.name} class={`flex-1 min-w-[110px] p-1 flex flex-col items-center justify-center gap-0.5 ${idx < activeGroups.length - 1 ? 'border-r border-amber-100' : ''} ${isEnabled ? 'bg-emerald-50' : 'bg-slate-100 opacity-60'}`}>
+                                            <div key={g.name || idx} class={`flex-1 min-w-[110px] p-1 flex flex-col items-center justify-center gap-0.5 ${idx < activeGroups.length - 1 ? 'border-r border-amber-100' : ''} ${isEnabled ? 'bg-emerald-50' : 'bg-slate-100 opacity-60'}`}>
                                                 {!isEnabled && <span class="text-[8px] font-bold text-slate-400 uppercase">Bloq. &lt; 100% Fís.</span>}
                                                 <input
                                                     type="number"
                                                     disabled={!isEnabled}
                                                     class={`w-full text-center border-none bg-transparent rounded p-1 text-[13px] outline-none ${isEnabled ? 'focus:ring-1 focus:ring-emerald-400 font-black text-emerald-900' : 'text-slate-400 font-bold'}`}
                                                     placeholder={isEnabled ? "0.00" : "-"}
-                                                    value={isEnabled ? (edpData[g.subs[0].id] || '') : ''}
-                                                    onChange={e => updateSubActivityProgress(row.id, g.subs[0].id, e.target.value)}
+                                                    value={(isEnabled && firstSubId) ? (edpData[firstSubId] || '') : ''}
+                                                    onChange={e => firstSubId && updateSubActivityProgress(row.id, firstSubId, e.target.value)}
                                                 />
                                             </div>
                                         );
                                     }
 
                                     const fisicaVals = g.subs.map(s => parseFloat(fisicaData[s.id]) || 0);
-                                    const allHaveProgress = fisicaVals.every(v => v > 0);
-                                    const avg = allHaveProgress ? (fisicaVals.reduce((a, b) => a + b, 0) / fisicaVals.length) : 0;
+                                    const allHaveProgress = fisicaVals.length > 0 && fisicaVals.every(v => v > 0);
+                                    const avg = (allHaveProgress && fisicaVals.length > 0) ? (fisicaVals.reduce((a, b) => a + b, 0) / fisicaVals.length) : 0;
                                     
                                     return (
-                                        <div key={g.name} class={`flex-1 min-w-[110px] p-1 flex flex-col items-center justify-center gap-0.5 ${idx < activeGroups.length - 1 ? 'border-r border-amber-100' : ''} bg-amber-50/20`}>
+                                        <div key={g.name || idx} class={`flex-1 min-w-[110px] p-1 flex flex-col items-center justify-center gap-0.5 ${idx < activeGroups.length - 1 ? 'border-r border-amber-100' : ''} bg-amber-50/20`}>
                                             <span class="text-[14px] font-black text-amber-900">
-                                                {allHaveProgress ? avg.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
+                                                {(allHaveProgress && !isNaN(avg)) ? avg.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
                                             </span>
                                         </div>
                                     );
