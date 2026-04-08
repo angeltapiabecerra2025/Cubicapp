@@ -2845,17 +2845,17 @@
             };
 
             const handleExportDB = () => {
-                const keys = ['app_itemizados', 'app_unidades', 'app_actividades', 'app_usuarios', 'app_roles', 'app_proyectos', 'app_especialidades', 'app_cubicaciones_rows', 'app_cubicaciones_columns'];
                 const data = {};
-                keys.forEach(key => {
-                    data[key] = JSON.parse(localStorage.getItem(key) || 'null');
-                });
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    data[key] = localStorage.getItem(key);
+                }
                 
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `cubicapp_backup_${new Date().toISOString().split('T')[0]}.json`;
+                a.download = `cubicapp_full_backup_${new Date().toISOString().split('T')[0]}.json`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -2870,14 +2870,19 @@
                     try {
                         const data = JSON.parse(event.target.result);
                         Object.keys(data).forEach(key => {
-                            if (data[key] !== null) {
-                                localStorage.setItem(key, JSON.stringify(data[key]));
+                            if (data[key] !== null && data[key] !== undefined) {
+                                // Soporta versiones anteriores que guardaban JSON.parse y versiones nuevas que guardan strings
+                                if (typeof data[key] === 'string') {
+                                    localStorage.setItem(key, data[key]);
+                                } else {
+                                    localStorage.setItem(key, JSON.stringify(data[key]));
+                                }
                             }
                         });
-                        alert('✅ Configuración importada correctamente. Reiniciando aplicación...');
+                        alert('✅ Base de Datos completa (incluyendo proyectos y cubicaciones) restaurada con éxito. Reiniciando aplicación...');
                         window.location.reload();
                     } catch (error) {
-                        alert('⚠️ Error al leer el archivo. Asegúrate de que es un archivo JSON de respaldo válido.');
+                        alert('⚠️ Error al leer el archivo. Asegúrate de que es un archivo JSON de respaldo válido.\n' + error);
                     }
                 };
                 reader.readAsText(file);
