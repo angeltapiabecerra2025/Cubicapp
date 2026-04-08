@@ -1710,15 +1710,34 @@
                 return parseFloat(sub?.porcentaje) || 0;
             };
 
+            const calculatePhysicalProgress = (row, act) => {
+                if (!act || !act.subActividades || act.subActividades.length === 0) return 0;
+                const fisicaData = row.subActivityProgress || {};
+                const allSubs = act.subActividades;
+                let totalPhysical = 0;
+                allSubs.forEach(sub => {
+                    const weight = parseFloat(sub.porcentaje) || 0;
+                    if (weight <= 0) return;
+                    const qty = parseFloat(fisicaData[sub.id]) || 0;
+                    totalPhysical += qty * weight / 100;
+                });
+                return totalPhysical;
+            };
+
             const calculateExecutedQty = (row, act, mode = 'parcial') => {
                 if (!act || !act.subActividades || act.subActividades.length === 0) return 0;
 
                 const isEDP = activeTab === 'edp';
                 const fisicaData = row.subActivityProgress || {};
+                const edpData = row.subActivityProgressEDP || {};
                 const allSubs = act.subActividades;
                 let totalExecuted = 0;
 
+                const takeoff = calculateTakeoff(row);
+
                 if (isEDP) {
+                    const physicalP = takeoff > 0 ? (calculatePhysicalProgress(row, act) / takeoff * 100) : 0;
+                    
                     // EDP: agrupar por el campo 'grupoEDP' (o 'nombre' si está vacío)
                     const groupsMap = {};
                     allSubs.forEach(s => {
@@ -1731,34 +1750,35 @@
                     Object.values(groupsMap).forEach(g => {
                         if (g.weight <= 0) return;
                         
-                        // Lógica estricta: El avance EDP solo cuenta si TODAS las sub-actividades físicas del grupo tienen avance
-                        const fyzVals = g.subs.map(s => parseFloat(fisicaData[s.id]) || 0);
-                        const allHaveProgress = fyzVals.every(v => v > 0);
+                        const isProtocolo = g.name.toLowerCase().includes('protocolo');
                         
-                        if (allHaveProgress) {
-                            const avg = fyzVals.reduce((a, b) => a + b, 0) / fyzVals.length;
-                            totalExecuted += avg * g.weight / 100;
+                        if (isProtocolo) {
+                            // Lógica Protocolo: Solo si físico >= 90% y es manual
+                            if (physicalP >= 90) {
+                                const manualVal = parseFloat(edpData[g.subs[0].id]) || 0;
+                                totalExecuted += manualVal * g.weight / 100;
+                            }
+                        } else {
+                            // Lógica estricta: El avance EDP solo cuenta si TODAS las sub-actividades físicas del grupo tienen avance
+                            const fyzVals = g.subs.map(s => parseFloat(fisicaData[s.id]) || 0);
+                            const allHaveProgress = fyzVals.every(v => v > 0);
+                            
+                            if (allHaveProgress) {
+                                const avg = fyzVals.reduce((a, b) => a + b, 0) / fyzVals.length;
+                                totalExecuted += avg * g.weight / 100;
+                            }
                         }
-                        // Si falta alguna sub-actividad por completar físicamente, el grupo aporta 0 al EDP
                     });
                 } else {
                     // FÍSICO
                     if (mode === 'real') {
-                        // Modo Real: Promedio simple de cantidades ingresadas (excluyendo protocolos)
-                        // El usuario solicita que si tiene 5 y 2, el resultado sea 3,5.
                         const subsReal = allSubs.filter(s => !(s.nombre || '').toLowerCase().includes('protocolo'));
                         if (subsReal.length === 0) return 0;
 
                         const sumVal = subsReal.reduce((acc, s) => acc + (parseFloat(fisicaData[s.id]) || 0), 0);
                         totalExecuted = sumVal / subsReal.length;
                     } else {
-                        // Modo Parcial: suma ponderada normal
-                        allSubs.forEach(sub => {
-                            const weight = parseFloat(sub.porcentaje) || 0;
-                            if (weight <= 0) return;
-                            const qty = parseFloat(fisicaData[sub.id]) || 0;
-                            totalExecuted += qty * weight / 100;
-                        });
+                        totalExecuted = calculatePhysicalProgress(row, act);
                     }
                 }
 
@@ -1793,13 +1813,36 @@
                     if (activeGroups.length === 0)
                         return <td class="p-3 border border-slate-200 text-center text-slate-400 text-xs italic" colSpan={maxSubs}>-</td>;
 
+                    const takeoff = calculateTakeoff(row);
+                    const physicalP = takeoff > 0 ? (calculatePhysicalProgress(row, act) / takeoff * 100) : 0;
+                    const edpData = row.subActivityProgressEDP || {};
+
                     return (
                         <td class="p-0 border border-slate-200 bg-amber-50/10" colSpan={maxSubs}>
                             <div class="flex h-full min-h-[48px]">
                                 {activeGroups.map((g, idx) => {
-                                    const фізикаVals = g.subs.map(s => parseFloat(fisicaData[s.id]) || 0);
-                                    const allHaveProgress = фізикаVals.every(v => v > 0);
-                                    const avg = allHaveProgress ? (фізикаVals.reduce((a, b) => a + b, 0) / фізикаVals.length) : 0;
+                                    const isProtocolo = g.name.toLowerCase().includes('protocolo');
+                                    
+                                    if (isProtocolo) {
+                                        const isEnabled = physicalP >= 90;
+                                        return (
+                                            <div key={g.name} class={`flex-1 min-w-[110px] p-1 flex flex-col items-center justify-center gap-0.5 ${idx < activeGroups.length - 1 ? 'border-r border-amber-100' : ''} ${isEnabled ? 'bg-emerald-50' : 'bg-slate-100 opacity-60'}`}>
+                                                {!isEnabled && <span class="text-[8px] font-bold text-slate-400 uppercase">Bloq. &lt; 90%</span>}
+                                                <input
+                                                    type="number"
+                                                    disabled={!isEnabled}
+                                                    class={`w-full text-center border-none bg-transparent rounded p-1 text-[13px] outline-none ${isEnabled ? 'focus:ring-1 focus:ring-emerald-400 font-black text-emerald-900' : 'text-slate-400 font-bold'}`}
+                                                    placeholder={isEnabled ? "0.00" : "-"}
+                                                    value={isEnabled ? (edpData[g.subs[0].id] || '') : ''}
+                                                    onChange={e => updateSubActivityProgress(row.id, g.subs[0].id, e.target.value)}
+                                                />
+                                            </div>
+                                        );
+                                    }
+
+                                    const fisicaVals = g.subs.map(s => parseFloat(fisicaData[s.id]) || 0);
+                                    const allHaveProgress = fisicaVals.every(v => v > 0);
+                                    const avg = allHaveProgress ? (fisicaVals.reduce((a, b) => a + b, 0) / fisicaVals.length) : 0;
                                     
                                     return (
                                         <div key={g.name} class={`flex-1 min-w-[110px] p-1 flex flex-col items-center justify-center gap-0.5 ${idx < activeGroups.length - 1 ? 'border-r border-amber-100' : ''} bg-amber-50/20`}>
