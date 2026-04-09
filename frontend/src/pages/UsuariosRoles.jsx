@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 const UsuariosRoles = () => {
     const [view, setView] = useState('usuarios'); // 'usuarios' or 'roles'
     const [usuarios, setUsuarios] = useState([
-        { id: 1, nombre: 'Admin Sistema', email: 'admin@cubicapp.cl', rol: 'Administrator' },
+        { id: 1, nombre: 'Admin Sistema', email: 'admin@eimicub.cl', rol: 'Administrator' },
         { id: 2, nombre: 'Juan Pérez', email: 'jperez@constructora.cl', rol: 'Project Manager' },
     ]);
     const [roles, setRoles] = useState([

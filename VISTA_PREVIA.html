@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vista Previa - Sistema de Cubicaciones</title>
+    <title>EIMI-CUB - Sistema de Cubicaciones</title>
     <!-- React & Tailwind CDN for Quick Visualization only -->
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -2855,7 +2855,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `cubicapp_full_backup_${new Date().toISOString().split('T')[0]}.json`;
+                a.download = `eimicub_full_backup_${new Date().toISOString().split('T')[0]}.json`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -2917,7 +2917,7 @@
                 }
             ]);
             const [usuariosInternas, setUsuariosInternas] = useLocalStorageState('app_usuarios', [
-                { id: 1, nombre: 'Admin Sistema', email: 'admin@cubicapp.cl', rol: 'Administrator' },
+                { id: 1, nombre: 'Admin Sistema', email: 'admin@eimicub.cl', rol: 'Administrator' },
                 { id: 2, nombre: 'Juan Pérez', email: 'jperez@constructora.cl', rol: 'Project Manager' }
             ]);
             const [rolesInternas, setRolesInternas] = useLocalStorageState('app_roles', [
@@ -2933,7 +2933,7 @@
                     id: 1, nombre: 'Edificio Horizonte', descripcion: 'Construcción habitacional 20 pisos',
                     actividades: [1, 2],
                     personal: [
-                        { id: 101, rol: 'Administrator', usuario: 'Admin Sistema', email: 'admin@cubicapp.cl' },
+                        { id: 101, rol: 'Administrator', usuario: 'Admin Sistema', email: 'admin@eimicub.cl' },
                         { id: 102, rol: 'Project Manager', usuario: 'Juan Pérez', email: 'jperez@constructora.cl' }
                     ]
                 },
@@ -3274,7 +3274,7 @@
                     )}
 
                     {/* Sidebar */}
-                    <aside class="w-64 bg-[#0f172a] text-white flex flex-col fixed h-full">
+                    <aside class="w-64 bg-white border-r border-slate-100 flex flex-col fixed h-full shadow-2xl shadow-slate-200/50 z-[70]">
                         {/* Success Notification */}
                         {successMsg.show && (
                             <div class="fixed top-6 right-6 z-[110] animate-in slide-in-from-right-8 duration-300">
@@ -3284,15 +3284,11 @@
                                 </div>
                             </div>
                         )}
-                        <div class="p-8 flex items-center gap-3">
-                            <span class="text-blue-500 text-3xl font-bold">📐</span>
-                            <div>
-                                <span class="text-xl font-extrabold tracking-tight block">CUBICAPP</span>
-                                <span class="text-[9px] font-bold text-blue-400/60 uppercase tracking-widest">v1.2 Stable</span>
-                            </div>
+                        <div class="p-6 pb-2">
+                            <img src="./eimi_cub_logo.png" alt="EIMI-CUB" class="w-full h-auto object-contain scale-110" />
                         </div>
                         <nav class="flex-1 px-4">
-                            <p class="text-[10px] font-bold text-slate-500 mb-4 px-4 tracking-widest uppercase">Menú Principal</p>
+                            <p class="text-[10px] font-black text-red-800/40 mb-6 px-4 tracking-[0.2em] uppercase">Menú Principal</p>
                             <ul class="space-y-1">
                                 {[
                                     { id: 'Dashboard', label: 'Dashboard', icon: 'dashboard' },
@@ -3303,21 +3299,29 @@
                                     { id: 'LogAdicionales', label: 'LOG de Adicionales', icon: 'planificacion' }
                                 ].map(item => (
                                     <li key={item.id}>
-                                        <a href="#" class={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${page === item.id || (['Unidades', 'Actividades', 'Usuarios', 'Roles', 'Proyectos', 'Partidas', 'Especialidades'].includes(page) && item.id === 'Mantenedores') ? 'bg-blue-600' : item.id === 'LogAdicionales' ? 'hover:bg-orange-800/80 text-orange-300 hover:text-white' : 'hover:bg-slate-800 text-slate-300 hover:text-white'}`} onClick={() => { setPage(item.id); setShowForm(false); }}>
-                                            <Icon name={item.icon} />
-                                            <span class="text-sm font-medium">{item.label}</span>
+                                        <a href="#" class={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${page === item.id || (['Unidades', 'Actividades', 'Usuarios', 'Roles', 'Proyectos', 'Partidas', 'Especialidades'].includes(page) && item.id === 'Mantenedores') ? 'bg-red-600 text-white shadow-lg shadow-red-500/30' : item.id === 'LogAdicionales' ? 'hover:bg-orange-50 text-orange-600 font-bold' : 'text-slate-500 hover:text-red-600 hover:bg-red-50'}`} onClick={() => { setPage(item.id); setShowForm(false); }}>
+                                            <span class={`text-lg ${page === item.id || (['Unidades', 'Actividades', 'Usuarios', 'Roles', 'Proyectos', 'Partidas', 'Especialidades'].includes(page) && item.id === 'Mantenedores') ? 'text-white' : 'text-slate-400 group-hover:text-red-500'}`}>
+                                                <Icon name={item.icon} />
+                                            </span>
+                                            <span class="text-sm font-bold tracking-tight">{item.label}</span>
                                         </a>
                                     </li>
                                 ))}
                             </ul>
                         </nav>
-                        <div class="p-6 border-t border-slate-800 mt-auto flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400">
-                                <Icon name="user" />
+                        <div class="p-6 border-t border-slate-100 mt-auto">
+                            <div class="flex items-center gap-3 mb-2">
+                                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 border border-slate-200">
+                                    <Icon name="user" />
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-xs font-black text-slate-800">Usuario Demo</p>
+                                    <p class="text-[10px] font-bold text-red-600/60 uppercase tracking-tighter">Super Usuario</p>
+                                </div>
                             </div>
-                            <div>
-                                <p class="text-xs font-semibold">Usuario Demo</p>
-                                <p class="text-[10px] text-slate-500">Super Usuario</p>
+                            <div class="pt-2 border-t border-slate-50 flex justify-between items-center">
+                                <span class="text-[9px] font-black text-slate-300 uppercase tracking-widest">v1.2 Stable</span>
+                                <span class="text-[9px] font-black text-red-100 bg-red-500 px-1.5 py-0.5 rounded">PRO</span>
                             </div>
                         </div>
                     </aside>

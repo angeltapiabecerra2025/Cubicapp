@@ -1,4 +1,4 @@
-# Sistema de Automatización de Cubicaciones
+# EIMI-CUB - Sistema de Automatización de Cubicaciones
 
 Este proyecto contiene el esqueleto y la lógica base para la aplicación de cubicaciones.
 
