@@ -16,7 +16,7 @@ const Layout = ({ children }) => {
     <div className="layout">
       <aside className="sidebar">
         <div className="sidebar-header">
-          <img src="/eimi_cub_logo.png" alt="EIMI-CUB" className="logo-full" />
+          <img src="eimi_cub_logo.png" alt="EIMI-CUB" className="logo-full" />
         </div>
 
         <nav className="sidebar-nav">
