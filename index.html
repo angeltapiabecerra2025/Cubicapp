@@ -2981,8 +2981,8 @@
         };
 
         const App = () => {
-            const [isAuthenticated, setIsAuthenticated] = React.useState(false);
-            const [currentUser, setCurrentUser] = React.useState(null);
+            const [isAuthenticated, setIsAuthenticated] = useLocalStorageState('app_auth', false);
+            const [currentUser, setCurrentUser] = useLocalStorageState('app_current_user', null);
             const [page, setPage] = useState('Planificacion');
             const [uploadedProgram, setUploadedProgram] = useState([]);
             const [selectedPlanningProject, setSelectedPlanningProject] = useState('');
