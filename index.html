@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Deployment Sync: 2026-04-10 11:20 -->
     <title>EIMI-CUB - Sistema de Cubicaciones</title>
     <!-- React & Tailwind CDN for Quick Visualization only -->
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -877,9 +878,11 @@
                 }
                 if (hasErrors) return;
 
-                const key = `cubicaciones_data_${activeProject}_${activeActivityFilter}`;
+                askConfirm('Confirmar Guardado General', '¿Deseas sincronizar todos los cambios actuales con la base de datos? Esto actualizará el avance final para esta obra y actividad.', () => {
+                    const key = `cubicaciones_data_${activeProject}_${activeActivityFilter}`;
                 localStorage.setItem(key, JSON.stringify(rowsToSave));
-                alert('✔ Avance guardado exitosamente para la obra y actividad actual.');
+                    showSuccess('✔ Avance guardado exitosamente');
+                });
             };
 
             const exportToExcel = () => {
@@ -1396,16 +1399,21 @@
                 if (formData.unidadId) {
                     const unit = unidades.find(u => u.id === formData.unidadId);
                     if (unit && unit.params.length > 0) {
-                        const missingParams = unit.params.filter(p => formData.mathParams[p] === undefined || formData.mathParams[p] === '');
-                        if (missingParams.length > 0) {
-                            alert(`⚠️ Faltan definir parámetros de fórmula: ${missingParams.join(', ')}`);
-                            return;
+                        const hasManualTotal = formData.mathParams.total !== undefined && formData.mathParams.total !== '' && formData.mathParams.total !== 0;
+                        if (!hasManualTotal) {
+                            const missingParams = unit.params.filter(p => formData.mathParams[p] === undefined || formData.mathParams[p] === '');
+                            if (missingParams.length > 0) {
+                                alert(`⚠️ Faltan definir parámetros de fórmula o ingresar un TOTAL MANUAL.`);
+                                return;
+                            }
                         }
                     }
                 }
 
-                if (isEditing && formData.id) {
-                    setRows(prevRows => prevRows.map(r => r.id === formData.id ? { ...formData } : r));
+                const processAction = () => {
+                    if (isEditing && formData.id) {
+                        setRows(prevRows => prevRows.map(r => r.id === formData.id ? { ...formData } : r));
+                        showSuccess('Cubicación actualizada con éxito');
                 } else {
                     const activeRows = rows.filter(r => {
                         const hasInfo = Object.values(r.infoFields || {}).some(v => v !== '');
@@ -1420,9 +1428,12 @@
                     const actId = activeActivityFilter ? parseInt(activeActivityFilter) : '';
                     const actObj = actividades.find(a => a.id === actId);
                     const unitId = actObj ? actObj.unidadId : '';
-                    setRows(activeRows);
+                        setRows(activeRows);
+                        showSuccess('Cubicación registrada correctamente');
                 }
-                resetForm();
+                    resetForm();
+                };
+                askConfirm(isEditing ? 'Confirmar Modificación' : 'Confirmar Adición', isEditing ? '¿Deseas guardar los cambios realizados?' : '¿Deseas añadir este nuevo registro de cubicación?', processAction);
             };
 
             const topScrollRef = React.useRef(null);
@@ -1463,7 +1474,10 @@
             };
 
             const handleDeleteRow = (id) => {
-                setRows(prevRows => prevRows.filter(r => r.id !== id));
+                askConfirm('Confirmar Eliminación', '¿Estás seguro de que deseas eliminar este registro de cubicación? Esta acción no se puede deshacer.', () => {
+                    setRows(prevRows => prevRows.filter(r => r.id !== id));
+                    showSuccess('Registro eliminado correctamente');
+                });
             };
 
             const updateFormInfoField = (colName, value) => {
@@ -1485,7 +1499,14 @@
             };
 
             const updateFormMathParam = (param, value) => {
-                const valNum = value === '' ? '' : (parseFloat(value) || 0);
+                // Solo números positivos
+                let valNum = value === '' ? '' : parseFloat(value);
+                if (valNum !== '' && !isNaN(valNum)) {
+                    valNum = Math.max(0, valNum);
+                } else if (value !== '') {
+                    valNum = 0;
+                }
+                
                 setFormData(prev => ({
                     ...prev, 
                     mathParams: { ...prev.mathParams, [param]: valNum }
@@ -1530,8 +1551,13 @@
             const updateMathParam = (rowId, param, value) => {
                 setRows(rows.map(r => {
                     if (r.id === rowId) {
-                        const valNum = parseFloat(value) || 0;
-                        return { ...r, mathParams: { ...r.mathParams, [param]: value === '' ? '' : valNum } };
+                        let valNum = value === '' ? '' : parseFloat(value);
+                        if (valNum !== '' && !isNaN(valNum)) {
+                            valNum = Math.max(0, valNum);
+                        } else if (value !== '') {
+                            valNum = 0;
+                        }
+                        return { ...r, mathParams: { ...r.mathParams, [param]: valNum } };
                     }
                     return r;
                 }));
@@ -1653,13 +1679,18 @@
                 
                 unit.params.forEach(p => {
                     const val = row.mathParams[p];
-                    if (val !== undefined && val !== '') {
+                    if (val !== undefined && val !== '' && val !== 0) {
                         paramsMap[p] = parseFloat(val);
                         hasValidInput = true;
                     } else {
                         paramsMap[p] = 0;
                     }
                 });
+
+                // SI NO HAY PARÁMETROS: Verificar si hay un TOTAL manual antes de devolver 0
+                if (!hasValidInput && row.mathParams.total !== undefined && row.mathParams.total !== '' && row.mathParams.total !== 0) {
+                    return Math.round(parseFloat(row.mathParams.total) * 100) / 100;
+                }
 
                 if (!hasValidInput && unit.params.length > 0) return 0;
 
@@ -2170,18 +2201,30 @@
                                                 {unidades.find(u => u.id === formData.unidadId)?.params.map(param => (
                                                     <div key={param} class="flex flex-col gap-0.5">
                                                         <label class="text-[8px] font-black text-emerald-600 uppercase">{param}</label>
-                                                        <input type="number" class="w-14 border border-emerald-200 rounded p-0.5 h-[22px] text-[10px] text-center focus:ring-1 focus:ring-emerald-400 outline-none bg-white font-bold" 
-                                                               value={formData.mathParams[param] || ''} onChange={e => updateFormMathParam(param, e.target.value)} />
+                                                        <input type="number" min="0" class="w-14 border border-emerald-200 rounded p-0.5 h-[22px] text-[10px] text-center focus:ring-1 focus:ring-emerald-400 outline-none bg-white font-bold" 
+                                                               value={formData.mathParams[param] || ''} 
+                                                               onChange={e => updateFormMathParam(param, e.target.value)}
+                                                               onKeyDown={(e) => { if(['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }} />
                                                     </div>
                                                 ))}
                                                 <div class="flex flex-col gap-0.5">
                                                     <label class="text-[8px] font-black text-emerald-600 uppercase">Cant.</label>
-                                                    <input type="number" class="w-14 border border-emerald-200 rounded p-0.5 h-[22px] text-[10px] text-center focus:ring-1 focus:ring-emerald-400 outline-none bg-emerald-100/50 font-black text-emerald-900" 
-                                                           value={formData.mathParams.cantidad || ''} onChange={e => updateFormMathParam('cantidad', e.target.value)} />
+                                                    <input type="number" min="0" class="w-14 border border-emerald-200 rounded p-0.5 h-[22px] text-[10px] text-center focus:ring-1 focus:ring-emerald-400 outline-none bg-emerald-100/50 font-black text-emerald-900" 
+                                                           value={formData.mathParams.cantidad || ''} 
+                                                           onChange={e => updateFormMathParam('cantidad', e.target.value)}
+                                                           onKeyDown={(e) => { if(['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }} />
                                                 </div>
-                                                <div class="border-l border-emerald-200 pl-3 ml-1">
-                                                    <div class="text-[8px] font-bold text-slate-400 uppercase">Total</div>
-                                                    <div class="text-[16px] font-black text-emerald-700 leading-none">{calculateTakeoff(formData).toLocaleString('es-CL', { maximumFractionDigits: 2 })}</div>
+                                                <div class="border-l border-emerald-200 pl-3 ml-1 flex flex-col gap-0.5">
+                                                    <label class="text-[8px] font-black text-emerald-600 uppercase">Total</label>
+                                                    <input 
+                                                        type="number" 
+                                                        min="0"
+                                                        class="w-20 border border-emerald-200 rounded p-0.5 h-[22px] text-[12px] text-center focus:ring-1 focus:ring-emerald-400 outline-none bg-emerald-50 font-black text-emerald-700" 
+                                                        value={formData.mathParams.total !== undefined ? formData.mathParams.total : ''} 
+                                                        onChange={e => updateFormMathParam('total', e.target.value)} 
+                                                        onKeyDown={(e) => { if(['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                                                        placeholder={calculateTakeoff(formData).toFixed(2)}
+                                                    />
                                                 </div>
                                                 <div class="flex items-center gap-2 ml-2">
                                                     {isEditing ? (
@@ -2466,7 +2509,7 @@
                                             const actividadObj = actividades.find(a => a.id === row.actividadId);
                                             const unidadObj = unidades.find(u => u.id === row.unidadId);
                                             
-                                            const totalTakeoff = calculateTakeoff(row);
+                                            const totalTakeoff = row.mathParams.total !== undefined && row.mathParams.total !== '' ? parseFloat(row.mathParams.total) : calculateTakeoff(row);
                                             const executedQtyP = calculateExecutedQty(row, actividadObj, 'parcial');
                                             const executedQtyR = calculateExecutedQty(row, actividadObj, 'real');
 
@@ -2541,9 +2584,11 @@
                                                                         <span class="text-[7px] text-emerald-600/60 uppercase font-black truncate max-w-full leading-none mb-[2px] mt-1 pointer-events-none">{param}</span>
                                                                         <input 
                                                                             type="number"
+                                                                            min="0"
                                                                             class="w-full bg-transparent border-none outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500 text-center text-[11px] font-black text-emerald-900 leading-none h-6 transition-colors shadow-none"
                                                                             value={row.mathParams[param] !== undefined ? row.mathParams[param] : ''}
                                                                             onChange={e => updateMathParam(row.id, param, e.target.value)}
+                                                                            onKeyDown={(e) => { if(['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
                                                                         />
                                                                     </div>
                                                                 ))}
@@ -2558,15 +2603,26 @@
                                                         <div class="flex h-10 items-center justify-center cursor-text">
                                                             <input 
                                                                 type="number"
+                                                                min="0"
                                                                 class="w-full h-full bg-transparent border-none outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500 text-center text-[10px] font-bold text-emerald-900 transition-colors shadow-none"
                                                                 value={row.mathParams.cantidad !== undefined ? row.mathParams.cantidad : ''}
                                                                 onChange={e => updateMathParam(row.id, 'cantidad', e.target.value)}
+                                                                onKeyDown={(e) => { if(['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
                                                             />
                                                         </div>
                                                     </td>
 
-                                                    <td class="p-2 bg-emerald-100/10 text-center font-black text-[11px] text-emerald-800 align-middle">
-                                                        {totalTakeoff > 0 ? totalTakeoff.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
+                                                    <td class="p-0 text-center transition-colors bg-emerald-100/10"
+                                                        onMouseEnter={() => setHoveredCol('total_manual')} onMouseLeave={() => setHoveredCol(null)}>
+                                                        <input 
+                                                            type="number"
+                                                            min="0"
+                                                            class="w-full h-10 bg-transparent border-none outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500 text-center text-[11px] font-black text-emerald-800 transition-colors shadow-none"
+                                                            value={row.mathParams.total !== undefined ? row.mathParams.total : ''}
+                                                            onChange={e => updateMathParam(row.id, 'total', e.target.value)}
+                                                            onKeyDown={(e) => { if(['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                                                            placeholder={totalTakeoff > 0 ? totalTakeoff.toFixed(2) : '-'}
+                                                        />
                                                     </td>
 
                                                     <td class="p-1 border border-slate-200">
@@ -2832,7 +2888,101 @@
             return [state, setState];
         };
 
+        const LoginPage = ({ onLogin }) => {
+            const [email, setEmail] = React.useState('');
+            const [password, setPassword] = React.useState('');
+            const [error, setError] = React.useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!email) {
+                    setError('Por favor, ingrese su correo electrÃ³nico.');
+                    return;
+                }
+                const expectedPassword = email.split('@')[0];
+                if (password === expectedPassword) {
+                    onLogin({ email });
+                } else {
+                    setError('ContraseÃ±a incorrecta. (Recuerde: es el prefijo de su correo)');
+                }
+            };
+
+            return (
+                <div class="min-h-screen bg-slate-100 flex items-center justify-center p-6 relative overflow-hidden font-sans">
+                    <div class="absolute -top-24 -left-24 w-[30rem] h-[30rem] bg-red-600/5 rounded-full blur-[100px] animate-pulse"></div>
+                    <div class="absolute -bottom-24 -right-24 w-[30rem] h-[30rem] bg-red-600/10 rounded-full blur-[100px] animate-pulse delay-700"></div>
+                    
+                    <div class="w-full max-w-md bg-white rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.12)] border border-white/40 p-12 relative z-10 animate-in fade-in zoom-in duration-1000 backdrop-blur-md">
+                        <div class="text-center mb-14">
+                            <div class="inline-block p-5 bg-white rounded-[2rem] shadow-2xl mb-10 transform hover:rotate-3 transition-transform duration-500 border border-slate-100">
+                                <img src="./eimi_cub_logo.png" alt="EIMI-CUB" class="h-24 drop-shadow-xl select-none" />
+                            </div>
+                            <h2 class="text-4xl font-black text-slate-900 tracking-tightest mb-4">EIMI-CUB</h2>
+                            <p class="text-slate-400 text-[11px] font-black uppercase tracking-[0.4em] mb-2">Plataforma de Control</p>
+                            <div class="h-1 w-12 bg-red-600 mx-auto rounded-full"></div>
+                        </div>
+
+                        <form onSubmit={handleSubmit} class="space-y-10">
+                            <div class="group">
+                                <label class="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2 transition-colors group-focus-within:text-red-600">Correo Corporativo</label>
+                                <div class="relative">
+                                    <span class="absolute left-6 top-1/2 -translate-y-1/2 text-2xl opacity-30 group-focus-within:opacity-100 transition-all group-focus-within:scale-110">ðŸ“§</span>
+                                    <input 
+                                        type="email" 
+                                        class="w-full bg-slate-50/50 border-2 border-slate-100 rounded-[1.5rem] p-5 pl-16 text-sm focus:ring-8 focus:ring-red-600/5 focus:border-red-600 focus:bg-white outline-none transition-all font-bold text-slate-800 placeholder:text-slate-300 shadow-inner" 
+                                        placeholder="usuario@ejemplo.com"
+                                        value={email}
+                                        onChange={e => setEmail(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div class="group">
+                                <label class="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2 transition-colors group-focus-within:text-red-600">Clave de Acceso</label>
+                                <div class="relative">
+                                    <span class="absolute left-6 top-1/2 -translate-y-1/2 text-2xl opacity-30 group-focus-within:opacity-100 transition-all group-focus-within:scale-110">ðŸ”‘</span>
+                                    <input 
+                                        type="password" 
+                                        class="w-full bg-slate-50/50 border-2 border-slate-100 rounded-[1.5rem] p-5 pl-16 text-sm focus:ring-8 focus:ring-red-600/5 focus:border-red-600 focus:bg-white outline-none transition-all font-bold text-slate-800 placeholder:text-slate-300 shadow-inner" 
+                                        placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                                        value={password}
+                                        onChange={e => setPassword(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            {error && (
+                                <div class="bg-red-50 border-2 border-red-100 text-red-600 text-[11px] font-black p-5 rounded-[1.5rem] animate-in shake duration-500 flex items-center gap-4">
+                                    <span class="text-2xl">âš¡</span>
+                                    <span>{error}</span>
+                                </div>
+                            )}
+
+                            <div class="pt-6">
+                                <button 
+                                    type="submit" 
+                                    class="w-full bg-slate-900 text-white rounded-[1.5rem] p-6 text-sm font-black shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] hover:bg-red-600 hover:scale-[1.03] active:scale-[0.97] transition-all duration-300 flex items-center justify-center gap-4 group"
+                                >
+                                    ACCEDER AL PANEL
+                                    <span class="group-hover:translate-x-2 transition-transform duration-300">â†’</span>
+                                </button>
+                            </div>
+                        </form>
+
+                        <div class="mt-14 pt-10 border-t-2 border-slate-50 text-center relative">
+                            <div class="absolute -top-[1.1rem] left-1/2 -translate-x-1/2 bg-white px-5 text-[10px] font-black text-slate-300 uppercase tracking-[0.4em]">EIMI-CUB SOFTWARE</div>
+                            <p class="text-[11px] text-slate-400 font-bold uppercase tracking-[0.2em]">GestiÃ³n Profesional de Obras</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         const App = () => {
+            const [isAuthenticated, setIsAuthenticated] = React.useState(false);
+            const [currentUser, setCurrentUser] = React.useState(null);
             const [page, setPage] = useState('Planificacion');
             const [uploadedProgram, setUploadedProgram] = useState([]);
             const [selectedPlanningProject, setSelectedPlanningProject] = useState('');
@@ -3243,10 +3393,13 @@
             };
 
             const handleSaveProgramRow = () => {
+                askConfirm('Confirmar Modificación', '¿Deseas guardar los cambios?', () => {
+
                 const updated = uploadedProgram.map(item => item.id === editProgramId ? tempProgramRow : item);
                 setUploadedProgram(updated);
                 setEditProgramId(null);
                 showSuccess('Actividad del programa actualizada');
+                });
             };
 
             const handleDeleteProgramRow = (id) => {
@@ -3255,6 +3408,13 @@
                     showSuccess('Actividad eliminada del programa');
                 });
             };
+
+            if (!isAuthenticated) {
+                return <LoginPage onLogin={(user) => { 
+                    setIsAuthenticated(true); 
+                    setCurrentUser(user); 
+                }} />;
+            }
 
             return (
                 <div class="flex min-h-screen">
@@ -3309,14 +3469,36 @@
                                 ))}
                             </ul>
                         </nav>
-                        <div class="p-6 border-t border-slate-100 mt-auto">
+                        <div class="p-6 border-t border-slate-100 mt-auto bg-slate-50/50">
+                            <div class="flex items-center gap-3 mb-4">
+                                <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-red-600 border-2 border-red-100 font-black text-xs shadow-sm shadow-red-500/10">
+                                    {currentUser?.email?.substring(0, 2).toUpperCase()}
+                                </div>
+                                <div class="flex-1 overflow-hidden">
+                                    <p class="text-xs font-black text-slate-800 truncate">{currentUser?.email?.split("@")[0]}</p>
+                                    <p class="text-[9px] font-bold text-red-600/60 uppercase tracking-tighter truncate">{currentUser?.email}</p>
+                                </div>
+                            </div>
+                            <div class="pt-3 border-t border-slate-200/60 flex justify-between items-center">
+                                <button 
+                                    class="text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-red-700 transition-colors flex items-center gap-1 group"
+                                    onClick={() => {
+                                        askConfirm("Cerrar SesiÃ³n", "Â¿EstÃ¡s seguro que deseas salir del sistema?", () => {
+                                            setIsAuthenticated(false);
+                                            setCurrentUser(null);
+                                        });
+                                    }}
+                                >
+                                    <span class="group-hover:-translate-x-0.5 transition-transform">â†</span> Salir
+                                </button>
+                                <span class="text-[9px] font-black text-red-100 bg-red-500 px-1.5 py-0.5 rounded shadow-sm">v1.2 PRO</span>
+                            </div>
+                        </div>
                             <div class="flex items-center gap-3 mb-2">
                                 <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 border border-slate-200">
                                     <Icon name="user" />
                                 </div>
                                 <div class="flex-1">
-                                    <p class="text-xs font-black text-slate-800">Usuario Demo</p>
-                                    <p class="text-[10px] font-bold text-red-600/60 uppercase tracking-tighter">Super Usuario</p>
                                 </div>
                             </div>
                             <div class="pt-2 border-t border-slate-50 flex justify-between items-center">
@@ -4422,6 +4604,10 @@
                                         const currentMap = matrizMCMappings[projId] || {};
                                         
                                         const setMapping = (taskId, itemId) => {
+                                            const item = projectPartidas.find(p => p._id === itemId);
+                                            const msg = itemId ? `¿Deseas vincular esta actividad con el ítem "${item?.Item}"?` : "¿Deseas desvincular esta actividad?";
+                                            askConfirm('Confirmar Vinculación', msg, () => {
+
                                             setMatrizMCMappings(prev => ({
                                                 ...prev,
                                                 [projId]: {
@@ -4429,6 +4615,8 @@
                                                     [taskId]: itemId
                                                 }
                                             }));
+                                            });
+
                                         };
 
                                         const mappedCount = Object.keys(currentMap).filter(k => currentMap[k]).length;
@@ -4546,4 +4734,6 @@
     </script>
 </body>
 
-</html>
+</html>< ! - -   c a c h e   b u s t :   0 4 / 1 0 / 2 0 2 6   0 9 : 5 8 : 0 0   - - > 
+ 
+ 
