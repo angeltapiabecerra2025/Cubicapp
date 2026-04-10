@@ -1396,10 +1396,13 @@
                 if (formData.unidadId) {
                     const unit = unidades.find(u => u.id === formData.unidadId);
                     if (unit && unit.params.length > 0) {
-                        const missingParams = unit.params.filter(p => formData.mathParams[p] === undefined || formData.mathParams[p] === '');
-                        if (missingParams.length > 0) {
-                            alert(`⚠️ Faltan definir parámetros de fórmula: ${missingParams.join(', ')}`);
-                            return;
+                        const hasManualTotal = formData.mathParams.total !== undefined && formData.mathParams.total !== '' && formData.mathParams.total !== 0;
+                        if (!hasManualTotal) {
+                            const missingParams = unit.params.filter(p => formData.mathParams[p] === undefined || formData.mathParams[p] === '');
+                            if (missingParams.length > 0) {
+                                alert(`⚠️ Faltan definir parámetros de fórmula o ingresar un TOTAL MANUAL.`);
+                                return;
+                            }
                         }
                     }
                 }
@@ -1485,7 +1488,14 @@
             };
 
             const updateFormMathParam = (param, value) => {
-                const valNum = value === '' ? '' : (parseFloat(value) || 0);
+                // Solo números positivos
+                let valNum = value === '' ? '' : parseFloat(value);
+                if (valNum !== '' && !isNaN(valNum)) {
+                    valNum = Math.max(0, valNum);
+                } else if (value !== '') {
+                    valNum = 0;
+                }
+                
                 setFormData(prev => ({
                     ...prev, 
                     mathParams: { ...prev.mathParams, [param]: valNum }
@@ -1530,8 +1540,13 @@
             const updateMathParam = (rowId, param, value) => {
                 setRows(rows.map(r => {
                     if (r.id === rowId) {
-                        const valNum = parseFloat(value) || 0;
-                        return { ...r, mathParams: { ...r.mathParams, [param]: value === '' ? '' : valNum } };
+                        let valNum = value === '' ? '' : parseFloat(value);
+                        if (valNum !== '' && !isNaN(valNum)) {
+                            valNum = Math.max(0, valNum);
+                        } else if (value !== '') {
+                            valNum = 0;
+                        }
+                        return { ...r, mathParams: { ...r.mathParams, [param]: valNum } };
                     }
                     return r;
                 }));
@@ -1653,13 +1668,18 @@
                 
                 unit.params.forEach(p => {
                     const val = row.mathParams[p];
-                    if (val !== undefined && val !== '') {
+                    if (val !== undefined && val !== '' && val !== 0) {
                         paramsMap[p] = parseFloat(val);
                         hasValidInput = true;
                     } else {
                         paramsMap[p] = 0;
                     }
                 });
+
+                // SI NO HAY PARÁMETROS: Verificar si hay un TOTAL manual antes de devolver 0
+                if (!hasValidInput && row.mathParams.total !== undefined && row.mathParams.total !== '' && row.mathParams.total !== 0) {
+                    return Math.round(parseFloat(row.mathParams.total) * 100) / 100;
+                }
 
                 if (!hasValidInput && unit.params.length > 0) return 0;
 
@@ -2170,18 +2190,30 @@
                                                 {unidades.find(u => u.id === formData.unidadId)?.params.map(param => (
                                                     <div key={param} class="flex flex-col gap-0.5">
                                                         <label class="text-[8px] font-black text-emerald-600 uppercase">{param}</label>
-                                                        <input type="number" class="w-14 border border-emerald-200 rounded p-0.5 h-[22px] text-[10px] text-center focus:ring-1 focus:ring-emerald-400 outline-none bg-white font-bold" 
-                                                               value={formData.mathParams[param] || ''} onChange={e => updateFormMathParam(param, e.target.value)} />
+                                                        <input type="number" min="0" class="w-14 border border-emerald-200 rounded p-0.5 h-[22px] text-[10px] text-center focus:ring-1 focus:ring-emerald-400 outline-none bg-white font-bold" 
+                                                               value={formData.mathParams[param] || ''} 
+                                                               onChange={e => updateFormMathParam(param, e.target.value)}
+                                                               onKeyDown={(e) => { if(['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }} />
                                                     </div>
                                                 ))}
                                                 <div class="flex flex-col gap-0.5">
                                                     <label class="text-[8px] font-black text-emerald-600 uppercase">Cant.</label>
-                                                    <input type="number" class="w-14 border border-emerald-200 rounded p-0.5 h-[22px] text-[10px] text-center focus:ring-1 focus:ring-emerald-400 outline-none bg-emerald-100/50 font-black text-emerald-900" 
-                                                           value={formData.mathParams.cantidad || ''} onChange={e => updateFormMathParam('cantidad', e.target.value)} />
+                                                    <input type="number" min="0" class="w-14 border border-emerald-200 rounded p-0.5 h-[22px] text-[10px] text-center focus:ring-1 focus:ring-emerald-400 outline-none bg-emerald-100/50 font-black text-emerald-900" 
+                                                           value={formData.mathParams.cantidad || ''} 
+                                                           onChange={e => updateFormMathParam('cantidad', e.target.value)}
+                                                           onKeyDown={(e) => { if(['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }} />
                                                 </div>
-                                                <div class="border-l border-emerald-200 pl-3 ml-1">
-                                                    <div class="text-[8px] font-bold text-slate-400 uppercase">Total</div>
-                                                    <div class="text-[16px] font-black text-emerald-700 leading-none">{calculateTakeoff(formData).toLocaleString('es-CL', { maximumFractionDigits: 2 })}</div>
+                                                <div class="border-l border-emerald-200 pl-3 ml-1 flex flex-col gap-0.5">
+                                                    <label class="text-[8px] font-black text-emerald-600 uppercase">Total</label>
+                                                    <input 
+                                                        type="number" 
+                                                        min="0"
+                                                        class="w-20 border border-emerald-200 rounded p-0.5 h-[22px] text-[12px] text-center focus:ring-1 focus:ring-emerald-400 outline-none bg-emerald-50 font-black text-emerald-700" 
+                                                        value={formData.mathParams.total !== undefined ? formData.mathParams.total : ''} 
+                                                        onChange={e => updateFormMathParam('total', e.target.value)} 
+                                                        onKeyDown={(e) => { if(['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                                                        placeholder={calculateTakeoff(formData).toFixed(2)}
+                                                    />
                                                 </div>
                                                 <div class="flex items-center gap-2 ml-2">
                                                     {isEditing ? (
@@ -2466,7 +2498,7 @@
                                             const actividadObj = actividades.find(a => a.id === row.actividadId);
                                             const unidadObj = unidades.find(u => u.id === row.unidadId);
                                             
-                                            const totalTakeoff = calculateTakeoff(row);
+                                            const totalTakeoff = row.mathParams.total !== undefined && row.mathParams.total !== '' ? parseFloat(row.mathParams.total) : calculateTakeoff(row);
                                             const executedQtyP = calculateExecutedQty(row, actividadObj, 'parcial');
                                             const executedQtyR = calculateExecutedQty(row, actividadObj, 'real');
 
@@ -2541,9 +2573,11 @@
                                                                         <span class="text-[7px] text-emerald-600/60 uppercase font-black truncate max-w-full leading-none mb-[2px] mt-1 pointer-events-none">{param}</span>
                                                                         <input 
                                                                             type="number"
+                                                                            min="0"
                                                                             class="w-full bg-transparent border-none outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500 text-center text-[11px] font-black text-emerald-900 leading-none h-6 transition-colors shadow-none"
                                                                             value={row.mathParams[param] !== undefined ? row.mathParams[param] : ''}
                                                                             onChange={e => updateMathParam(row.id, param, e.target.value)}
+                                                                            onKeyDown={(e) => { if(['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
                                                                         />
                                                                     </div>
                                                                 ))}
@@ -2558,15 +2592,26 @@
                                                         <div class="flex h-10 items-center justify-center cursor-text">
                                                             <input 
                                                                 type="number"
+                                                                min="0"
                                                                 class="w-full h-full bg-transparent border-none outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500 text-center text-[10px] font-bold text-emerald-900 transition-colors shadow-none"
                                                                 value={row.mathParams.cantidad !== undefined ? row.mathParams.cantidad : ''}
                                                                 onChange={e => updateMathParam(row.id, 'cantidad', e.target.value)}
+                                                                onKeyDown={(e) => { if(['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
                                                             />
                                                         </div>
                                                     </td>
 
-                                                    <td class="p-2 bg-emerald-100/10 text-center font-black text-[11px] text-emerald-800 align-middle">
-                                                        {totalTakeoff > 0 ? totalTakeoff.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
+                                                    <td class="p-0 text-center transition-colors bg-emerald-100/10"
+                                                        onMouseEnter={() => setHoveredCol('total_manual')} onMouseLeave={() => setHoveredCol(null)}>
+                                                        <input 
+                                                            type="number"
+                                                            min="0"
+                                                            class="w-full h-10 bg-transparent border-none outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500 text-center text-[11px] font-black text-emerald-800 transition-colors shadow-none"
+                                                            value={row.mathParams.total !== undefined ? row.mathParams.total : ''}
+                                                            onChange={e => updateMathParam(row.id, 'total', e.target.value)}
+                                                            onKeyDown={(e) => { if(['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                                                            placeholder={totalTakeoff > 0 ? totalTakeoff.toFixed(2) : '-'}
+                                                        />
                                                     </td>
 
                                                     <td class="p-1 border border-slate-200">
