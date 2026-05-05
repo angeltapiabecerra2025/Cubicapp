@@ -9102,44 +9102,7 @@
                                     </div>
                                 )}
                             </div>
-                        ) : page === 'Especialidades' ? (
-                                <div class="space-y-6">
-                                    <div class="flex justify-between items-center">
-                                        <button class="text-slate-500 text-sm font-medium flex items-center gap-2 hover:text-blue-600" onClick={() => { setPage('Mantenedores'); setShowForm(false); }}>
-                                            ← Volver a Mantenedores
-                                        </button>
-                                        {!showForm && (
-                                            <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-500/20" onClick={() => { setShowForm(true); setFormEsp({ id: null, nombre: '' }); }}>
-                                                <Icon name="plus" /> Nueva Especialidad
-                                            </button>
-                                        )}
-                                    </div>
 
-                                    {showForm ? (
-                                        <div class="bg-white rounded-xl border border-blue-200 shadow-xl p-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                                            <div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
-                                                <h3 class="font-bold text-lg text-slate-800">{formEsp.id ? 'Editar Especialidad' : 'Nueva Especialidad'}</h3>
-                                                <button class="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-700" onClick={handleSaveEsp}>Guardar Especialidad</button>
-                                            </div>
-                                            <div>
-                                                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Nombre Especialidad</label>
-                                                <input class="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ej: Electricidad" value={formEsp.nombre} onChange={e => setFormEsp({ ...formEsp, nombre: e.target.value })} />
-                                            </div>
-                                            <div class="flex justify-end gap-3 pt-6 border-t border-slate-100">
-                                                <button class="px-6 py-2 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-lg" onClick={() => setShowForm(false)}>Cancelar</button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-8">
-                                            <h3 class="font-bold text-lg mb-4 text-slate-800">Especialidades Configuradas</h3>
-                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div class="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-white hover:border-blue-400 transition-all group min-h-[140px]" onClick={() => { setShowForm(true); setFormAct({ id: null, nombre: '', desc: '', subActividades: [] }); }}>
-                                            <div class="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-blue-500 transition-colors mb-2 text-xl">+</div>
-                                            <p class="text-[10px] font-bold text-slate-400 group-hover:text-blue-600 uppercase tracking-widest text-center">Añadir Actividad de Obra</p>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
                         ) : page === 'MantenedorObra' ? (
                                 <div class="space-y-6">
                                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
