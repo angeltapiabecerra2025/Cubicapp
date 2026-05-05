@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <div id="output">Validating Babel Syntax...</div>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+        fetch('index.html')
+            .then(r => r.text())
+            .then(html => {
+                try {
+                    const codeBlock = html.split('<script type="text/babel">')[1].split('<\/script>')[0];
+                    const output = Babel.transform(codeBlock, { presets: ['react'] });
+                    document.getElementById('output').innerHTML = "<h1>SUCCESS</h1><p>No syntax errors found.</p>";
+                } catch (e) {
+                    document.getElementById('output').innerHTML = "<h1>ERROR</h1><pre>" + e.message + "</pre>";
+                    console.error(e);
+                }
+            })
+            .catch(err => {
+                document.getElementById('output').innerHTML = "<h1>FETCH ERROR</h1><pre>" + err.message + "</pre>";
+            });
+    </script>
+</body>
+</html>
