@@ -19,6 +19,21 @@
         body {
             font-family: 'Inter', sans-serif;
         }
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
     </style>
 </head>
 
@@ -2640,7 +2655,6 @@
                                             <th class="p-2 bg-emerald-900/40 text-emerald-100 text-[9px]" style={{width: `${maxMathParams * 80}px`}} rowSpan={2}>Parámetros</th>
                                             <th class="p-2 w-16 bg-emerald-900/40 text-emerald-100 text-[9px]" rowSpan={2}>Cant.</th>
                                             <th class="p-2 w-28 bg-emerald-800 text-white font-black text-[9px]" rowSpan={2}>TOTAL</th>
-                                            <th class="p-2 w-48 bg-slate-700 text-white font-black text-[9px]" rowSpan={2}>PROGRAMA (ITEMIZADO)</th>
 
                                             <th class={`p-0 ${activeTab === 'fisico' ? 'bg-blue-800' : 'bg-amber-800'} text-white font-black text-[9px] transition-colors duration-300`} colSpan={effectiveMaxSubs} style={{ width: `${effectiveMaxSubs * 140}px`, minWidth: `${effectiveMaxSubs * 140}px` }}>
                                                 <div class="flex items-center justify-between px-3 py-1.5">
@@ -2901,58 +2915,6 @@
 
                                                     <td class="p-2 bg-emerald-100/10 text-center font-black text-[11px] text-emerald-800 align-middle">
                                                         {totalTakeoff > 0 ? totalTakeoff.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
-                                                    </td>
-
-                                                    <td class="p-1 border border-slate-200">
-                                                        {(() => {
-                                                            const items = itemizadosPorProyecto[activeProject] || [];
-                                                            const listId = `itemizado-list-${row.id}`;
-                                                            const selectedPt = items.find(pt => (pt._id || pt.id) == row.partidaId);
-                                                            const displayVal = selectedPt
-                                                                ? `${selectedPt.Item || selectedPt.item} - ${selectedPt.Descripcion_Item || selectedPt.descripcion || ''}`
-                                                                : (row._partidaSearch || '');
-                                                            return (
-                                                                <>
-                                                                    <input
-                                                                        list={listId}
-                                                                        class={`w-full border ${row.partidaId ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white text-slate-600'} rounded p-1 text-[9px] font-bold outline-none focus:ring-1 focus:ring-blue-400 transition-colors h-7`}
-                                                                        placeholder="Buscar ítem..."
-                                                                        defaultValue={displayVal}
-                                                                        key={row.partidaId || 'empty'}
-                                                                        onChange={(e) => {
-                                                                            const val = e.target.value;
-                                                                            const match = items.find(pt => {
-                                                                                const label = `${pt.Item || pt.item} - ${pt.Descripcion_Item || pt.descripcion || ''}`;
-                                                                                return label === val;
-                                                                            });
-                                                                            if (match) {
-                                                                                // Actualizar partidaId Y campos de información (Item y Descripción)
-                                                                                setRows(rows.map(r => r.id === row.id ? {
-                                                                                    ...r,
-                                                                                    partidaId: match._id || match.id,
-                                                                                    infoFields: {
-                                                                                        ...r.infoFields,
-                                                                                        'Item': match.Item || match.item || '',
-                                                                                        'Descripción': match.Descripcion_Item || match.descripcion || ''
-                                                                                    }
-                                                                                } : r));
-                                                                            } else if (val === '' || val.trim() === '') {
-                                                                                updateRowField(row.id, 'partidaId', '');
-                                                                            }
-                                                                        }}
-                                                                    />
-                                                                    <datalist id={listId}>
-                                                                        {items.map((pt, i) => {
-                                                                            const cod = pt.Item || pt.item || '';
-                                                                            const desc = pt.Descripcion_Item || pt.descripcion || '';
-                                                                            return (
-                                                                                <option key={pt._id || pt.id || i} value={`${cod} - ${desc}`} />
-                                                                            );
-                                                                        })}
-                                                                    </datalist>
-                                                                </>
-                                                            );
-                                                        })()}
                                                     </td>
 
                                                     {renderSubActivities(row, actividadObj, maxSubActivities)}
@@ -6144,49 +6106,137 @@ const LogAdicionalesPage = ({ proyectos, showSuccess, askConfirm }) => {
 
     const exportExcel = () => {
         if (adicionales.length === 0) return;
-        const wsData = adicionales.map(a => {
-            const hist = a.historialRevisiones || [];
-            let revisiones = {};
-            if (hist.length > 0) {
-                hist.forEach((h) => {
-                    revisiones[`Monto ${h.revision}`] = h.montoPresentado;
-                    revisiones[`Costo Total ${h.revision}`] = h.costoTotal;
-                });
-            } else if (a.historialMontos && a.historialMontos.length > 0) {
-                revisiones['Monto Inicial (Rev 0)'] = a.historialMontos[0].monto;
-                a.historialMontos.slice(1).forEach((h, idx) => {
-                    revisiones[`Monto Rev ${idx + 1}`] = h.monto;
-                });
-            } else {
-                revisiones['Monto Inicial (Rev 0)'] = a.montoPresentado;
+
+        const getMonto = (r) => {
+            if (!r) return '';
+            return r.montoPresentado || r.costoTotal || r.costoNeto || '';
+        };
+        const formatDate = (d) => {
+            if (!d) return '';
+            let datePart = String(d).split(',')[0].split(' ')[0].trim();
+            const sep = datePart.includes('/') ? '/' : '-';
+            const parts = datePart.split(sep);
+            if (parts.length === 3) {
+                if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+                if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}`;
             }
+            return datePart;
+        };
+
+        const wsData = adicionales.map(ad => {
+            const revs = ad.historialRevisiones || [];
             
+            const val_rev0_fecha = ad.rev0_fecha !== undefined ? ad.rev0_fecha : formatDate(revs[0]?.fecha || ad.fechaCreacion);
+            const val_rev0_monto = ad.rev0_monto !== undefined ? ad.rev0_monto : getMonto(revs[0]);
+            
+            const val_rev1_fecha = ad.rev1_fecha !== undefined ? ad.rev1_fecha : formatDate(revs[1]?.fecha);
+            const val_rev1_monto = ad.rev1_monto !== undefined ? ad.rev1_monto : getMonto(revs[1]);
+
+            const val_rev2_fecha = ad.rev2_fecha !== undefined ? ad.rev2_fecha : formatDate(revs[2]?.fecha);
+            const val_rev2_monto = ad.rev2_monto !== undefined ? ad.rev2_monto : getMonto(revs[2]);
+
+            const val_rev3_fecha = ad.rev3_fecha !== undefined ? ad.rev3_fecha : formatDate(revs[3]?.fecha);
+            const val_rev3_monto = ad.rev3_monto !== undefined ? ad.rev3_monto : getMonto(revs[3]);
+
+            const isTerminado = ad.estado === 'Aprobada' || ad.estado === 'Rechazada' || ad.estado === 'Anulada';
+            const isAprobado = ad.estado === 'Aprobada';
+            const lastRev = revs.length > 0 ? revs[revs.length - 1] : null;
+            
+            const val_aprob_fecha = ad.aprob_fecha !== undefined ? ad.aprob_fecha : (isTerminado ? formatDate(lastRev?.fecha || ad.fechaCreacion) : '');
+            const val_aprob_monto = ad.aprob_monto !== undefined ? ad.aprob_monto : (isTerminado ? getMonto(lastRev) : '');
+            const val_aprob_ok = ad.aprob_ok !== undefined ? ad.aprob_ok : isAprobado;
+
+            const val_seg_cco = ad.seg_cco !== undefined ? ad.seg_cco : 'EIMI398';
+
+            const hhTotal = ad.hhp_total !== undefined ? ad.hhp_total : (ad.hhGastadas || '');
+            const esp = (ad.especialidad || '').toLowerCase();
+            const val_hhp_oocc = ad.hhp_oocc !== undefined ? ad.hhp_oocc : (esp.includes('civil') || esp.includes('obras') ? hhTotal : '');
+            const val_hhp_estruct = ad.hhp_estruct !== undefined ? ad.hhp_estruct : (esp.includes('estruct') ? hhTotal : '');
+            const val_hhp_piping = ad.hhp_piping !== undefined ? ad.hhp_piping : (esp.includes('piping') ? hhTotal : '');
+            const val_hhp_mecanica = ad.hhp_mecanica !== undefined ? ad.hhp_mecanica : (esp.includes('mecanic') ? hhTotal : '');
+            const val_hhp_electrica = ad.hhp_electrica !== undefined ? ad.hhp_electrica : (esp.includes('electric') || esp.includes('instrument') ? hhTotal : '');
+            const val_hhp_andamios = ad.hhp_andamios !== undefined ? ad.hhp_andamios : (esp.includes('andamio') ? hhTotal : '');
+            const isGeneral = !['civil','obras','estruct','piping','mecanic','electric','instrument','andamio'].some(k => esp.includes(k));
+            const val_hhp_general = ad.hhp_general !== undefined ? ad.hhp_general : (isGeneral && hhTotal ? hhTotal : '');
+
             return {
-                'N° Adicional': a.numero,
-                'Especialidad': a.especialidad,
-                'Contrato': a.contrato,
-                'Área': a.area,
-                'Fecha Creación': a.fechaCreacion,
-                'Descripción': a.descripcion,
-                'Info Referencial': a.infoReferencial,
-                'Razón Mod': a.razonMod,
-                'Afecta Costo': a.afectaCosto ? 'Sí' : 'No',
-                'Afecta Plazo': a.afectaPlazo ? 'Sí' : 'No',
-                'Afecta Calidad': a.afectaCalidad ? 'Sí' : 'No',
-                'Estado Obra': a.estadoObra,
-                'Costo Total': a.costoTotal,
-                'Costo Neto': a.costoNeto,
-                '% Avance': a.avance,
-                '% Certeza': a.certeza,
-                ...revisiones,
-                'Monto Presentado Actual': a.montoPresentado,
-                'HH Gastadas': a.hhGastadas,
-                'Precio Unitario': a.precioUnitario,
-                'Estado': a.estado
+                'N°': ad.numero || '',
+                'ID3WL': ad.id3wl || '',
+                'Título': ad.descripcion || '',
+                'Crítica': ad.critica ? 'Sí' : 'No',
+                'Ruta': ad.ruta || '',
+                
+                'Primer Envío Rev 0 - Fecha': val_rev0_fecha || '',
+                'Primer Envío Rev 0 - N° Carta': ad.rev0_carta || '',
+                'Primer Envío Rev 0 - Monto': val_rev0_monto ? Number(val_rev0_monto) : '',
+                
+                'Segundo Envío Rev 1 - Fecha': val_rev1_fecha || '',
+                'Segundo Envío Rev 1 - N° Carta': ad.rev1_carta || '',
+                'Segundo Envío Rev 1 - Monto': val_rev1_monto ? Number(val_rev1_monto) : '',
+                
+                'Tercer Envío Rev 2 - Fecha': val_rev2_fecha || '',
+                'Tercer Envío Rev 2 - N° Carta': ad.rev2_carta || '',
+                'Tercer Envío Rev 2 - Monto': val_rev2_monto ? Number(val_rev2_monto) : '',
+                
+                'Cuarto Envío Rev 3 - Fecha': val_rev3_fecha || '',
+                'Cuarto Envío Rev 3 - N° Carta': ad.rev3_carta || '',
+                'Cuarto Envío Rev 3 - Monto': val_rev3_monto ? Number(val_rev3_monto) : '',
+                
+                'Aprobación - Fecha': val_aprob_fecha || '',
+                'Aprobación - N° Carta': ad.aprob_carta || '',
+                'Aprobación - Monto': val_aprob_monto ? Number(val_aprob_monto) : '',
+                'Aprobación - OK': val_aprob_ok ? 'Sí' : 'No',
+                
+                'HH Pres. - Total': hhTotal ? Number(hhTotal) : '',
+                'HH Pres. - OOCC': val_hhp_oocc ? Number(val_hhp_oocc) : '',
+                'HH Pres. - Estruct': val_hhp_estruct ? Number(val_hhp_estruct) : '',
+                'HH Pres. - Piping': val_hhp_piping ? Number(val_hhp_piping) : '',
+                'HH Pres. - Mecánica': val_hhp_mecanica ? Number(val_hhp_mecanica) : '',
+                'HH Pres. - Eléctrica': val_hhp_electrica ? Number(val_hhp_electrica) : '',
+                'HH Pres. - Andamios': val_hhp_andamios ? Number(val_hhp_andamios) : '',
+                'HH Pres. - General': val_hhp_general ? Number(val_hhp_general) : '',
+                
+                'Costo Directo': ad.costo_directo ? Number(ad.costo_directo) : '',
+                'Costo Indirecto': ad.costo_indirecto ? Number(ad.costo_indirecto) : '',
+                'Costo GG': ad.costo_gg ? Number(ad.costo_gg) : '',
+                'Costo Utilidad': ad.costo_utilidad ? Number(ad.costo_utilidad) : '',
+                'Costo Total': ad.costoTotal ? Number(ad.costoTotal) : '',
+                
+                'Estado Seg.': ad.seg_status || '',
+                'Especialidad': ad.especialidad || '',
+                'CCO': val_seg_cco || '',
+                'Reg. Pago': ad.seg_reg_pago || '',
+                'Estado': ad.estado || 'Presentada',
+                'Factura': ad.seg_factura || '',
+                
+                'Avance (%)': ad.avance ? Number(ad.avance) : '',
+                'Certeza (%)': ad.certeza ? Number(ad.certeza) : '',
+                
+                'HH Gan. - OOCC': ad.hhg_oocc ? Number(ad.hhg_oocc) : '',
+                'HH Gan. - Estruct': ad.hhg_estruct ? Number(ad.hhg_estruct) : '',
+                'HH Gan. - Piping': ad.hhg_piping ? Number(ad.hhg_piping) : '',
+                'HH Gan. - Mecánica': ad.hhg_mecanica ? Number(ad.hhg_mecanica) : '',
+                'HH Gan. - Eléctrica': ad.hhg_electrica ? Number(ad.hhg_electrica) : '',
+                'HH Gan. - Andamios': ad.hhg_andamios ? Number(ad.hhg_andamios) : '',
+                'HH Gan. - General': ad.hhg_general ? Number(ad.hhg_general) : '',
+                
+                'Observaciones': ad.observaciones || ''
             };
         });
         
         const ws = XLSX.utils.json_to_sheet(wsData);
+        ws['!cols'] = [
+            {wch: 5}, {wch: 10}, {wch: 40}, {wch: 8}, {wch: 15},
+            {wch: 12}, {wch: 10}, {wch: 15}, {wch: 12}, {wch: 10}, {wch: 15},
+            {wch: 12}, {wch: 10}, {wch: 15}, {wch: 12}, {wch: 10}, {wch: 15},
+            {wch: 12}, {wch: 10}, {wch: 15}, {wch: 8},
+            {wch: 10}, {wch: 10}, {wch: 10}, {wch: 10}, {wch: 10}, {wch: 10}, {wch: 10}, {wch: 10},
+            {wch: 12}, {wch: 12}, {wch: 12}, {wch: 12}, {wch: 15},
+            {wch: 15}, {wch: 15}, {wch: 10}, {wch: 12}, {wch: 15}, {wch: 12},
+            {wch: 10}, {wch: 10},
+            {wch: 10}, {wch: 10}, {wch: 10}, {wch: 10}, {wch: 10}, {wch: 10}, {wch: 10},
+            {wch: 40}
+        ];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Adicionales");
         XLSX.writeFile(wb, `Log_Adicionales_${obraSeleccionada}.xlsx`);
@@ -6228,6 +6278,25 @@ const LogAdicionalesPage = ({ proyectos, showSuccess, askConfirm }) => {
     const fmt = (n) => (n || n === 0) ? Number(n).toLocaleString('es-CL') : '';
     const getMontoDisplay = (ad) => parseFloat(ad?.montoPresentado) || parseFloat(ad?.costoNeto) || parseFloat(ad?.costoTotal) || 0;
 
+    const handleInlineEdit = (id, field, value) => {
+        let newAds = [...adicionales];
+        const index = newAds.findIndex(a => a.id === id);
+        if (index >= 0) {
+            newAds[index] = { ...newAds[index], [field]: value };
+            saveAdicionales(newAds);
+        }
+    };
+
+    const handleCurrencyEdit = (id, field, value) => {
+        const val = String(value).replace(/\D/g, '');
+        const num = val ? parseInt(val, 10) : '';
+        handleInlineEdit(id, field, num);
+    };
+
+    const inputCls = "w-full min-w-[50px] bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white focus:ring-0 outline-none text-center px-1 py-0.5 text-[10px] text-slate-700 transition-colors";
+    const textInputCls = "w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white focus:ring-0 outline-none px-1 py-0.5 text-[10px] text-slate-700 transition-colors";
+    const checkCls = "w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer";
+
     return (
         <div class="space-y-6 text-left">
             <div class="bg-gradient-to-br from-red-700 via-red-600 to-red-800 rounded-2xl p-8 text-white shadow-xl">
@@ -6243,7 +6312,7 @@ const LogAdicionalesPage = ({ proyectos, showSuccess, askConfirm }) => {
             {!showForm ? (
                 <div class="space-y-6 animate-in fade-in">
                     <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex items-end justify-between gap-4">
-                        <div class="flex-1 max-w-sm">
+                        <div class="flex-none min-w-[250px] w-auto max-w-full">
                             <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Seleccionar Obra</label>
                             <select 
                                 class="w-full border border-slate-200 rounded-lg p-3 text-sm bg-slate-50 focus:ring-2 focus:ring-[#1e5896] outline-none font-bold text-slate-700"
@@ -6301,38 +6370,243 @@ const LogAdicionalesPage = ({ proyectos, showSuccess, askConfirm }) => {
                                 </div>
                             </div>
 
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                                <table class="w-full text-left text-xs">
-                                    <thead class="bg-slate-50 border-b border-slate-200 uppercase font-black text-[9px] text-slate-500 tracking-wider">
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto custom-scrollbar">
+                                <table class="w-full text-left text-[10px] whitespace-nowrap min-w-max border-collapse">
+                                    <thead class="bg-slate-50 border-b border-slate-200 font-bold text-slate-700 text-center tracking-tight">
                                         <tr>
-                                            <th class="px-4 py-3">N°</th>
-                                            <th class="px-4 py-3">Especialidad</th>
-                                            <th class="px-4 py-3">Descripción</th>
-                                            <th class="px-4 py-3 text-center">% Av.</th>
-                                            <th class="px-4 py-3 text-center">% Cer.</th>
-                                            <th class="px-4 py-3 text-right">Monto Pres.</th>
-                                            <th class="px-4 py-3 text-center">Estado</th>
-                                            <th class="px-4 py-3 text-right">Acciones</th>
+                                            <th rowSpan="2" class="p-1.5 border-r border-slate-200 bg-slate-100">N°</th>
+                                            <th rowSpan="2" class="p-1.5 border-r border-slate-200 bg-slate-100">ID3WL</th>
+                                            <th rowSpan="2" class="p-1.5 border-r border-slate-200 bg-slate-100">Título</th>
+                                            <th rowSpan="2" class="p-1.5 border-r border-slate-200 bg-slate-100">Crítica</th>
+                                            <th rowSpan="2" class="p-1.5 border-r border-slate-200 bg-slate-100">Ruta</th>
+                                            <th colSpan="3" class="p-1.5 border-r border-slate-200 bg-blue-50/70">Primer Envío Rev 0</th>
+                                            <th colSpan="3" class="p-1.5 border-r border-slate-200 bg-blue-100/60">Segundo Envío Rev 1</th>
+                                            <th colSpan="3" class="p-1.5 border-r border-slate-200 bg-blue-50/70">Tercer Envío Rev 2</th>
+                                            <th colSpan="3" class="p-1.5 border-r border-slate-200 bg-blue-100/60">Cuarto Envío Rev 3</th>
+                                            <th colSpan="4" class="p-1.5 border-r border-slate-200 bg-emerald-50/60">Aprobación/Rechazo Cliente</th>
+                                            <th colSpan="8" class="p-1.5 border-r border-slate-200 bg-amber-50/60">Desglose HH Presupuestadas</th>
+                                            <th colSpan="5" class="p-1.5 border-r border-slate-200 bg-purple-50/60">Costo $</th>
+                                            <th colSpan="6" class="p-1.5 border-r border-slate-200 bg-slate-50">Estado / Seguimiento</th>
+                                            <th colSpan="2" class="p-1.5 border-r border-slate-200 bg-teal-50/60">Avance</th>
+                                            <th colSpan="7" class="p-1.5 border-r border-slate-200 bg-orange-50/60">HH Ganadas</th>
+                                            <th rowSpan="2" class="p-1.5 border-r border-slate-200 bg-slate-100">Observaciones</th>
+                                            <th rowSpan="2" class="p-1.5 bg-slate-100 sticky right-0 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">Acciones</th>
+                                        </tr>
+                                        <tr class="text-[9px] text-slate-500 font-semibold bg-white">
+                                            {/* Rev 0 */}
+                                            <th class="p-1 border-r border-slate-200 border-t">Fecha</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">N°Carta</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Monto</th>
+                                            {/* Rev 1 */}
+                                            <th class="p-1 border-r border-slate-200 border-t">Fecha</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">N°Carta</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Monto</th>
+                                            {/* Rev 2 */}
+                                            <th class="p-1 border-r border-slate-200 border-t">Fecha</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">N°Carta</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Monto</th>
+                                            {/* Rev 3 */}
+                                            <th class="p-1 border-r border-slate-200 border-t">Fecha</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">N°Carta</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Monto</th>
+                                            {/* Aprobación */}
+                                            <th class="p-1 border-r border-slate-200 border-t">Fecha</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">N°Carta</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Monto</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Aprobado</th>
+                                            {/* HH Pres */}
+                                            <th class="p-1 border-r border-slate-200 border-t bg-amber-50/20 text-amber-800">Total</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">OOCC</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Estruct</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Piping</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Mecánica</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Eléctrica</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Andamios</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">General</th>
+                                            {/* Costo $ */}
+                                            <th class="p-1 border-r border-slate-200 border-t">Directo</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Indirecto</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">GG</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Utilidad 2,5%</th>
+                                            <th class="p-1 border-r border-slate-200 border-t bg-purple-50/20 text-purple-800">Total</th>
+                                            {/* Estado / Seg */}
+                                            <th class="p-1 border-r border-slate-200 border-t">Status</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Especialidad</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">CCO</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Reg. Pago</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Estado</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">N° Fact.</th>
+                                            {/* Avance */}
+                                            <th class="p-1 border-r border-slate-200 border-t">% Económico</th>
+                                            <th class="p-1 border-r border-slate-200 border-t">Certeza</th>
+                                            {/* HH Ganadas */}
+                                            <th class="p-1 border-r border-slate-200 border-t text-orange-700 bg-orange-50/20">OOCC</th>
+                                            <th class="p-1 border-r border-slate-200 border-t text-orange-700 bg-orange-50/20">Estruct</th>
+                                            <th class="p-1 border-r border-slate-200 border-t text-orange-700 bg-orange-50/20">Piping</th>
+                                            <th class="p-1 border-r border-slate-200 border-t text-orange-700 bg-orange-50/20">Mecánica</th>
+                                            <th class="p-1 border-r border-slate-200 border-t text-orange-700 bg-orange-50/20">Eléctrica</th>
+                                            <th class="p-1 border-r border-slate-200 border-t text-orange-700 bg-orange-50/20">Andamios</th>
+                                            <th class="p-1 border-r border-slate-200 border-t text-orange-700 bg-orange-50/20">General</th>
                                         </tr>
                                     </thead>
-                                    <tbody class="divide-y divide-slate-100">
-                                        {adicionales.map(ad => (
-                                            <tr key={ad.id} class="hover:bg-slate-50">
-                                                <td class="px-4 py-3 font-bold">{ad.numero}</td>
-                                                <td class="px-4 py-3">{ad.especialidad}</td>
-                                                <td class="px-4 py-3 truncate max-w-[200px]" title={ad.descripcion}>{ad.descripcion}</td>
-                                                <td class="px-4 py-3 text-center font-bold text-blue-600">{ad.avance}%</td>
-                                                <td class="px-4 py-3 text-center font-bold text-indigo-600">{ad.certeza}%</td>
-                                                <td class="px-4 py-3 text-right font-black text-slate-700">${fmt(getMontoDisplay(ad))}</td>
-                                                <td class="px-4 py-3 text-center">
-                                                    <span class={`px-2 py-1 rounded text-[9px] font-bold uppercase ${ad.estado === 'Aprobada' ? 'bg-green-100 text-green-700' : ad.estado === 'Rechazada' || ad.estado === 'Anulada' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{ad.estado}</span>
+                                    <tbody class="divide-y divide-slate-100 bg-white">
+                                        {adicionales.map(ad => {
+                                            const revs = ad.historialRevisiones || [];
+                                            const getMonto = (r) => {
+                                                if (!r) return '';
+                                                return r.montoPresentado || r.costoTotal || r.costoNeto || '';
+                                            };
+                                            const formatDate = (d) => {
+                                                if (!d) return '';
+                                                let datePart = String(d).split(',')[0].split(' ')[0].trim();
+                                                const sep = datePart.includes('/') ? '/' : '-';
+                                                const parts = datePart.split(sep);
+                                                if (parts.length === 3) {
+                                                    if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+                                                    if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}`;
+                                                }
+                                                return datePart;
+                                            };
+                                            const fmtMoney = (val) => {
+                                                if (val === '' || val === null || val === undefined) return '';
+                                                const num = parseFloat(String(val).replace(/\D/g, ''));
+                                                if (isNaN(num)) return val;
+                                                return '$' + num.toLocaleString('es-CL');
+                                            };
+
+                                            const val_rev0_fecha = ad.rev0_fecha !== undefined ? ad.rev0_fecha : formatDate(revs[0]?.fecha || ad.fechaCreacion);
+                                            const val_rev0_monto = ad.rev0_monto !== undefined ? ad.rev0_monto : getMonto(revs[0]);
+                                            
+                                            const val_rev1_fecha = ad.rev1_fecha !== undefined ? ad.rev1_fecha : formatDate(revs[1]?.fecha);
+                                            const val_rev1_monto = ad.rev1_monto !== undefined ? ad.rev1_monto : getMonto(revs[1]);
+
+                                            const val_rev2_fecha = ad.rev2_fecha !== undefined ? ad.rev2_fecha : formatDate(revs[2]?.fecha);
+                                            const val_rev2_monto = ad.rev2_monto !== undefined ? ad.rev2_monto : getMonto(revs[2]);
+
+                                            const val_rev3_fecha = ad.rev3_fecha !== undefined ? ad.rev3_fecha : formatDate(revs[3]?.fecha);
+                                            const val_rev3_monto = ad.rev3_monto !== undefined ? ad.rev3_monto : getMonto(revs[3]);
+
+                                            const isTerminado = ad.estado === 'Aprobada' || ad.estado === 'Rechazada' || ad.estado === 'Anulada';
+                                            const isAprobado = ad.estado === 'Aprobada';
+                                            const lastRev = revs.length > 0 ? revs[revs.length - 1] : null;
+                                            
+                                            const val_aprob_fecha = ad.aprob_fecha !== undefined ? ad.aprob_fecha : (isTerminado ? formatDate(lastRev?.fecha || ad.fechaCreacion) : '');
+                                            const val_aprob_monto = ad.aprob_monto !== undefined ? ad.aprob_monto : (isTerminado ? getMonto(lastRev) : '');
+                                            const val_aprob_ok = ad.aprob_ok !== undefined ? ad.aprob_ok : isAprobado;
+
+                                            const val_seg_cco = ad.seg_cco !== undefined ? ad.seg_cco : 'EIMI398';
+
+                                            const hhTotal = ad.hhp_total !== undefined ? ad.hhp_total : (ad.hhGastadas || '');
+                                            const esp = (ad.especialidad || '').toLowerCase();
+                                            const val_hhp_oocc = ad.hhp_oocc !== undefined ? ad.hhp_oocc : (esp.includes('civil') || esp.includes('obras') ? hhTotal : '');
+                                            const val_hhp_estruct = ad.hhp_estruct !== undefined ? ad.hhp_estruct : (esp.includes('estruct') ? hhTotal : '');
+                                            const val_hhp_piping = ad.hhp_piping !== undefined ? ad.hhp_piping : (esp.includes('piping') ? hhTotal : '');
+                                            const val_hhp_mecanica = ad.hhp_mecanica !== undefined ? ad.hhp_mecanica : (esp.includes('mecanic') ? hhTotal : '');
+                                            const val_hhp_electrica = ad.hhp_electrica !== undefined ? ad.hhp_electrica : (esp.includes('electric') || esp.includes('instrument') ? hhTotal : '');
+                                            const val_hhp_andamios = ad.hhp_andamios !== undefined ? ad.hhp_andamios : (esp.includes('andamio') ? hhTotal : '');
+                                            const isGeneral = !['civil','obras','estruct','piping','mecanic','electric','instrument','andamio'].some(k => esp.includes(k));
+                                            const val_hhp_general = ad.hhp_general !== undefined ? ad.hhp_general : (isGeneral && hhTotal ? hhTotal : '');
+
+                                            return (
+                                            <tr key={ad.id} class="hover:bg-slate-50/80 transition-colors group">
+                                                {/* Básicos */}
+                                                <td class="p-0 border-r border-slate-100"><input class={`${textInputCls} font-bold text-blue-700`} style={{minWidth:'40px'}} value={ad.numero || ''} onChange={e => handleInlineEdit(ad.id, 'numero', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={textInputCls} style={{minWidth:'60px'}} value={ad.id3wl || ''} onChange={e => handleInlineEdit(ad.id, 'id3wl', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={textInputCls} style={{minWidth:'180px'}} value={ad.descripcion || ''} onChange={e => handleInlineEdit(ad.id, 'descripcion', e.target.value)} title={ad.descripcion} /></td>
+                                                <td class="p-0 border-r border-slate-100 text-center flex items-center justify-center pt-1.5"><input type="checkbox" class={checkCls} checked={ad.critica || false} onChange={e => handleInlineEdit(ad.id, 'critica', e.target.checked)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={textInputCls} style={{minWidth:'60px'}} value={ad.ruta || ''} onChange={e => handleInlineEdit(ad.id, 'ruta', e.target.value)} /></td>
+                                                
+                                                {/* Rev 0 */}
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} type="date" value={val_rev0_fecha} onChange={e => handleInlineEdit(ad.id, 'rev0_fecha', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={ad.rev0_carta || ''} onChange={e => handleInlineEdit(ad.id, 'rev0_carta', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={fmtMoney(val_rev0_monto)} onChange={e => handleCurrencyEdit(ad.id, 'rev0_monto', e.target.value)} /></td>
+                                                
+                                                {/* Rev 1 */}
+                                                <td class="p-0 border-r border-slate-100 bg-blue-50/20"><input class={inputCls} type="date" value={val_rev1_fecha} onChange={e => handleInlineEdit(ad.id, 'rev1_fecha', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100 bg-blue-50/20"><input class={inputCls} value={ad.rev1_carta || ''} onChange={e => handleInlineEdit(ad.id, 'rev1_carta', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100 bg-blue-50/20"><input class={inputCls} value={fmtMoney(val_rev1_monto)} onChange={e => handleCurrencyEdit(ad.id, 'rev1_monto', e.target.value)} /></td>
+                                                
+                                                {/* Rev 2 */}
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} type="date" value={val_rev2_fecha} onChange={e => handleInlineEdit(ad.id, 'rev2_fecha', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={ad.rev2_carta || ''} onChange={e => handleInlineEdit(ad.id, 'rev2_carta', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={fmtMoney(val_rev2_monto)} onChange={e => handleCurrencyEdit(ad.id, 'rev2_monto', e.target.value)} /></td>
+                                                
+                                                {/* Rev 3 */}
+                                                <td class="p-0 border-r border-slate-100 bg-blue-50/20"><input class={inputCls} type="date" value={val_rev3_fecha} onChange={e => handleInlineEdit(ad.id, 'rev3_fecha', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100 bg-blue-50/20"><input class={inputCls} value={ad.rev3_carta || ''} onChange={e => handleInlineEdit(ad.id, 'rev3_carta', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100 bg-blue-50/20"><input class={inputCls} value={fmtMoney(val_rev3_monto)} onChange={e => handleCurrencyEdit(ad.id, 'rev3_monto', e.target.value)} /></td>
+                                                
+                                                {/* Aprobación */}
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} type="date" value={val_aprob_fecha} onChange={e => handleInlineEdit(ad.id, 'aprob_fecha', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={ad.aprob_carta || ''} onChange={e => handleInlineEdit(ad.id, 'aprob_carta', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={fmtMoney(val_aprob_monto)} onChange={e => handleCurrencyEdit(ad.id, 'aprob_monto', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100 text-center flex items-center justify-center pt-1.5"><input type="checkbox" class={checkCls} checked={val_aprob_ok} onChange={e => handleInlineEdit(ad.id, 'aprob_ok', e.target.checked)} /></td>
+                                                
+                                                {/* HH Presupuestadas */}
+                                                <td class="p-0 border-r border-slate-100 bg-amber-50/30"><input class={`${inputCls} font-bold text-amber-800`} value={hhTotal} onChange={e => handleInlineEdit(ad.id, 'hhp_total', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={val_hhp_oocc} onChange={e => handleInlineEdit(ad.id, 'hhp_oocc', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={val_hhp_estruct} onChange={e => handleInlineEdit(ad.id, 'hhp_estruct', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={val_hhp_piping} onChange={e => handleInlineEdit(ad.id, 'hhp_piping', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={val_hhp_mecanica} onChange={e => handleInlineEdit(ad.id, 'hhp_mecanica', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={val_hhp_electrica} onChange={e => handleInlineEdit(ad.id, 'hhp_electrica', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={val_hhp_andamios} onChange={e => handleInlineEdit(ad.id, 'hhp_andamios', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={val_hhp_general} onChange={e => handleInlineEdit(ad.id, 'hhp_general', e.target.value)} /></td>
+                                                
+                                                {/* Costo $ */}
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={fmtMoney(ad.costo_directo)} onChange={e => handleCurrencyEdit(ad.id, 'costo_directo', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={fmtMoney(ad.costo_indirecto)} onChange={e => handleCurrencyEdit(ad.id, 'costo_indirecto', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={fmtMoney(ad.costo_gg)} onChange={e => handleCurrencyEdit(ad.id, 'costo_gg', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={fmtMoney(ad.costo_utilidad)} onChange={e => handleCurrencyEdit(ad.id, 'costo_utilidad', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100 bg-purple-50/30"><input class={`${inputCls} font-bold text-purple-800`} value={fmtMoney(ad.costoTotal)} onChange={e => handleCurrencyEdit(ad.id, 'costoTotal', e.target.value)} /></td>
+                                                
+                                                {/* Estado / Seg */}
+                                                <td class="p-0 border-r border-slate-100">
+                                                    <select class="w-full min-w-[100px] bg-transparent outline-none text-[10px] text-center font-bold px-1 py-0.5 text-slate-700 appearance-none cursor-pointer hover:bg-slate-50 focus:bg-white" value={ad.seg_status || ''} onChange={e => handleInlineEdit(ad.id, 'seg_status', e.target.value)}>
+                                                        <option value="">-</option>
+                                                        <option value="Pendiente Aprobación 1" class="text-orange-600">Pendiente Aprobación 1</option>
+                                                        <option value="Aprobado" class="text-emerald-600">Aprobado</option>
+                                                        <option value="Rechazado" class="text-red-600">Rechazado</option>
+                                                    </select>
                                                 </td>
-                                                <td class="px-4 py-3 text-right">
-                                                    <button class="text-amber-500 hover:bg-amber-50 p-1.5 rounded mr-1" onClick={() => handleEdit(ad)}>✏️</button>
-                                                    <button class="text-red-500 hover:bg-red-50 p-1.5 rounded" onClick={() => handleDelete(ad.id)}>🗑️</button>
+                                                <td class="p-0 border-r border-slate-100"><input class={textInputCls} style={{minWidth:'80px', textAlign:'center'}} value={ad.especialidad || ''} onChange={e => handleInlineEdit(ad.id, 'especialidad', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={val_seg_cco} onChange={e => handleInlineEdit(ad.id, 'seg_cco', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={ad.seg_reg_pago || ''} onChange={e => handleInlineEdit(ad.id, 'seg_reg_pago', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100 h-full">
+                                                    <select class={`w-full h-full min-w-[80px] outline-none text-[10px] text-center font-bold px-1 py-1 appearance-none cursor-pointer ${ad.estado === 'Aprobada' ? 'bg-green-100 text-green-700' : (ad.estado === 'Rechazada' || ad.estado === 'Anulada' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700')}`} value={ad.estado || ''} onChange={e => handleInlineEdit(ad.id, 'estado', e.target.value)}>
+                                                        <option value="Presentada" class="bg-white text-yellow-700">Presentada</option>
+                                                        <option value="Aprobada" class="bg-white text-green-700">Aprobada</option>
+                                                        <option value="Rechazada" class="bg-white text-red-700">Rechazada</option>
+                                                        <option value="Anulada" class="bg-white text-red-700">Anulada</option>
+                                                    </select>
+                                                </td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={ad.seg_factura || ''} onChange={e => handleInlineEdit(ad.id, 'seg_factura', e.target.value)} /></td>
+                                                
+                                                {/* Avance */}
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={ad.avance || ''} onChange={e => handleInlineEdit(ad.id, 'avance', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100"><input class={inputCls} value={ad.certeza || ''} onChange={e => handleInlineEdit(ad.id, 'certeza', e.target.value)} /></td>
+                                                
+                                                {/* HH Ganadas */}
+                                                <td class="p-0 border-r border-slate-100 bg-orange-50/30"><input class={`${inputCls} text-orange-700 font-medium`} value={ad.hhg_oocc || ''} onChange={e => handleInlineEdit(ad.id, 'hhg_oocc', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100 bg-orange-50/30"><input class={`${inputCls} text-orange-700 font-medium`} value={ad.hhg_estruct || ''} onChange={e => handleInlineEdit(ad.id, 'hhg_estruct', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100 bg-orange-50/30"><input class={`${inputCls} text-orange-700 font-medium`} value={ad.hhg_piping || ''} onChange={e => handleInlineEdit(ad.id, 'hhg_piping', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100 bg-orange-50/30"><input class={`${inputCls} text-orange-700 font-medium`} value={ad.hhg_mecanica || ''} onChange={e => handleInlineEdit(ad.id, 'hhg_mecanica', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100 bg-orange-50/30"><input class={`${inputCls} text-orange-700 font-medium`} value={ad.hhg_electrica || ''} onChange={e => handleInlineEdit(ad.id, 'hhg_electrica', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100 bg-orange-50/30"><input class={`${inputCls} text-orange-700 font-medium`} value={ad.hhg_andamios || ''} onChange={e => handleInlineEdit(ad.id, 'hhg_andamios', e.target.value)} /></td>
+                                                <td class="p-0 border-r border-slate-100 bg-orange-50/30"><input class={`${inputCls} text-orange-700 font-medium`} value={ad.hhg_general || ''} onChange={e => handleInlineEdit(ad.id, 'hhg_general', e.target.value)} /></td>
+                                                
+                                                {/* Observaciones */}
+                                                <td class="p-0 border-r border-slate-100"><input class={textInputCls} style={{minWidth:'150px'}} value={ad.observaciones || ''} onChange={e => handleInlineEdit(ad.id, 'observaciones', e.target.value)} /></td>
+                                                
+                                                {/* Acciones */}
+                                                <td class="p-1 text-center bg-white sticky right-0 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)] border-l border-slate-100">
+                                                    <div class="flex justify-center items-center gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                                                        <button class="text-amber-500 hover:bg-amber-50 p-1 rounded" onClick={() => handleEdit(ad)} title="Editar en Formulario">✏️</button>
+                                                        <button class="text-red-500 hover:bg-red-50 p-1 rounded" onClick={() => handleDelete(ad.id)} title="Eliminar">🗑️</button>
+                                                    </div>
                                                 </td>
                                             </tr>
-                                        ))}
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
