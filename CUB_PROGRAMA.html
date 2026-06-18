@@ -7,7 +7,7 @@
     <title>Cub-Programa - Sistema de Cubicaciones de Planificación</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.6/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -1851,9 +1851,10 @@
                                                             onMouseLeave={() => setHoveredCol(null)}>
                                                             <input 
                                                                 type="text" 
-                                                                class="w-full bg-transparent border-none outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 px-2 h-8 text-[10px] font-bold text-slate-700 text-center transition-colors shadow-none" 
+                                                                class="w-full bg-transparent border-none outline-none px-2 h-8 text-[10px] font-bold text-slate-500 text-center shadow-none cursor-not-allowed" 
                                                                 value={row.infoFields[col] || ''}
-                                                                onChange={e => updateInfoField(row.id, col, e.target.value)}
+                                                                readOnly
+                                                                disabled
                                                             />
                                                         </td>
                                                         );
@@ -1877,9 +1878,9 @@
                                                                     <span class="text-[6px] text-blue-600 uppercase font-black leading-none mb-[1px] mt-1 pointer-events-none">MAN</span>
                                                                     <input 
                                                                         type="number"
-                                                                        class="w-full bg-transparent border-none outline-none focus:bg-white focus:ring-1 focus:ring-blue-400 text-center text-[10px] font-black text-blue-900 leading-none h-6 transition-colors shadow-none"
+                                                                        class="w-full bg-transparent border-none outline-none text-center text-[10px] font-black text-blue-900/50 leading-none h-6 shadow-none cursor-not-allowed"
                                                                         value={row.mathParams.valorManual || ''}
-                                                                        onChange={e => updateMathParam(row.id, 'valorManual', e.target.value)}
+                                                                        readOnly disabled
                                                                         placeholder="0.0"
                                                                     />
                                                                 </div>
@@ -1888,9 +1889,9 @@
                                                                         <span class="text-[7px] text-emerald-600/60 uppercase font-black truncate max-w-full leading-none mb-[2px] mt-1 pointer-events-none">{param}</span>
                                                                         <input 
                                                                             type="number"
-                                                                            class="w-full bg-transparent border-none outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500 text-center text-[11px] font-black text-emerald-900 leading-none h-6 transition-colors shadow-none"
+                                                                            class="w-full bg-transparent border-none outline-none text-center text-[11px] font-black text-emerald-900/50 leading-none h-6 shadow-none cursor-not-allowed"
                                                                             value={row.mathParams[param] !== undefined ? row.mathParams[param] : ''}
-                                                                            onChange={e => updateMathParam(row.id, param, e.target.value)}
+                                                                            readOnly disabled
                                                                         />
                                                                     </div>
                                                                 ))}
@@ -1905,9 +1906,9 @@
                                                         <div class="flex h-10 items-center justify-center cursor-text">
                                                             <input 
                                                                 type="number"
-                                                                class="w-full h-full bg-transparent border-none outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500 text-center text-[10px] font-bold text-emerald-900 transition-colors shadow-none"
+                                                                class="w-full h-full bg-transparent border-none outline-none text-center text-[10px] font-bold text-emerald-900/50 shadow-none cursor-not-allowed"
                                                                 value={row.mathParams.cantidad !== undefined ? row.mathParams.cantidad : ''}
-                                                                onChange={e => updateMathParam(row.id, 'cantidad', e.target.value)}
+                                                                readOnly disabled
                                                             />
                                                         </div>
                                                     </td>
