@@ -2042,7 +2042,7 @@
         // ============================================================
         //  COMPONENTE: PartidasPage - Carga Masiva de Itemizado
         // ============================================================
-        const PartidasPage = ({ proyectos, askConfirm, showSuccess, onVolver, updateItemizadosGlobal, itemizadosPorProyecto, actividades, unidades, isObra = false }) => {
+        const PartidasPage = ({ proyectos, askConfirm, showSuccess, onVolver, updateItemizadosGlobal, itemizadosPorProyecto, actividades, unidades, isObra = false, isEstadoPago = false }) => {
             const { useState, useRef, useEffect } = React;
             const [obraSeleccionada, setObraSeleccionada] = useState(null);
             const [itemizado, setItemizado] = useState([]);
@@ -2051,6 +2051,20 @@
             const [errores, setErrores] = useState([]);
             const [editRowId, setEditRowId] = useState(null);
             const fileInputRef = useRef(null);
+            const topScrollRef = useRef(null);
+            const tableScrollRef = useRef(null);
+
+            const handleTopScroll = () => {
+                if (tableScrollRef.current && topScrollRef.current) {
+                    tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+                }
+            };
+
+            const handleTableScroll = () => {
+                if (tableScrollRef.current && topScrollRef.current) {
+                    topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+                }
+            };
             const [avancesPorItem, setAvancesPorItem] = useState({});
 
             // Helpers locales para cálculo de avance
@@ -2229,9 +2243,15 @@
                 const memoHH = {};
                 const memoAva = {};
                 const memoHHG = {};
+                const memoEpaValAct = {};
+                const memoEpaValAnt = {};
+                const memoEpaValPres = {};
 
                 const getSumsRecursive = (norm) => {
-                    if (memoPrice[norm] !== undefined) return { price: memoPrice[norm], hh: memoHH[norm], ava: memoAva[norm], hhg: memoHHG[norm] };
+                    if (memoPrice[norm] !== undefined) return { 
+                        price: memoPrice[norm], hh: memoHH[norm], ava: memoAva[norm], hhg: memoHHG[norm],
+                        epaValAct: memoEpaValAct[norm], epaValAnt: memoEpaValAnt[norm], epaValPres: memoEpaValPres[norm]
+                    };
 
                     const prefix = norm + '.';
                     const directChildren = allNorms.filter(n => {
@@ -2266,6 +2286,9 @@
                     let tHH = 0;
                     let tAva = 0;
                     let tHHG = 0;
+                    let tEpaAct = 0;
+                    let tEpaAnt = 0;
+                    let tEpaPres = 0;
 
                     if (directChildren.length > 0) {
                         directChildren.forEach(cn => {
@@ -2274,6 +2297,9 @@
                             tHH += res.hh;
                             tAva += res.ava;
                             tHHG += res.hhg;
+                            tEpaAct += res.epaValAct;
+                            tEpaAnt += res.epaValAnt;
+                            tEpaPres += res.epaValPres;
                         });
                     } else {
                         rowsByNorm[norm].forEach(row => {
@@ -2282,6 +2308,9 @@
                             const hh = clean(row.HH_Total);
                             tPrice += (c * p);
                             tHH += hh;
+                            tEpaAct += (parseFloat(row['_EPA_ValorActual']) || 0);
+                            tEpaAnt += (parseFloat(row['_EPA_ValorAnterior']) || 0);
+                            tEpaPres += (parseFloat(row['_EPA_ValorPresente']) || 0);
                         });
                         tAva = (avancesPorItem[getNorm(norm)] || 0);
                         const r = rowsByNorm[norm][0] ? clean(rowsByNorm[norm][0].Rendimiento || 0) : 0;
@@ -2292,7 +2321,10 @@
                     memoHH[norm] = tHH;
                     memoAva[norm] = tAva;
                     memoHHG[norm] = tHHG;
-                    return { price: tPrice, hh: tHH, ava: tAva, hhg: tHHG };
+                    memoEpaValAct[norm] = tEpaAct;
+                    memoEpaValAnt[norm] = tEpaAnt;
+                    memoEpaValPres[norm] = tEpaPres;
+                    return { price: tPrice, hh: tHH, ava: tAva, hhg: tHHG, epaValAct: tEpaAct, epaValAnt: tEpaAnt, epaValPres: tEpaPres };
                 };
 
                 return sortedItems.map(it => {
@@ -2311,6 +2343,9 @@
                         _HHNum: res.hh,
                         _AvanceFisico: res.ava,
                         _HHGanadas: res.hhg,
+                        _EPA_ValorActual: res.epaValAct,
+                        _EPA_ValorAnterior: res.epaValAnt,
+                        _EPA_ValorPresente: res.epaValPres,
                         _CantidadNum: clean(it['Cantidad']),
                         _PrecioUNum: clean(it['Precio_Unitario']),
                         _HHNumOriginal: clean(it['HH_Total']),
@@ -2444,6 +2479,43 @@
                 setItemizado(prev => {
                     const newList = prev.map(row => row._id === id ? { ...row, [field]: value } : row);
                     return calculateHierarchyTotals(newList);
+                });
+            };
+
+            const handleEPAEdit = (id, field, value) => {
+                setItemizado(prev => {
+                    const newList = prev.map(row => {
+                        if (row._id === id) {
+                            let updated = { ...row, [field]: value };
+                            let pUnit = parseFloat(updated['_PrecioUNum']) || 0;
+                            let cantTotal = parseFloat(updated['_CantidadNum']) || 0;
+                            let numVal = parseFloat(value) || 0;
+
+                            if (field === '_EPA_AvancePct') {
+                                updated['_EPA_CantActual'] = cantTotal > 0 ? (numVal / 100) * cantTotal : 0;
+                            } else if (field === '_EPA_CantActual') {
+                                if (cantTotal > 0) {
+                                    updated['_EPA_AvancePct'] = (numVal / cantTotal) * 100;
+                                }
+                            }
+                            
+                            let cAct = parseFloat(updated['_EPA_CantActual']) || 0;
+                            let cAnt = parseFloat(updated['_EPA_CantAnterior']) || 0;
+                            
+                            updated['_EPA_ValorActual'] = cAct * pUnit;
+                            updated['_EPA_ValorAnterior'] = cAnt * pUnit;
+                            updated['_EPA_CantPresente'] = cAct - cAnt;
+                            updated['_EPA_ValorPresente'] = updated['_EPA_CantPresente'] * pUnit;
+                            return updated;
+                        }
+                        return row;
+                    });
+                    
+                    const calculated = calculateHierarchyTotals(newList);
+                    if (obraSeleccionada && updateItemizadosGlobal) {
+                        updateItemizadosGlobal(obraSeleccionada, calculated);
+                    }
+                    return calculated;
                 });
             };
 
@@ -2689,25 +2761,75 @@
                             </div>
 
                             {/* Tabla de Itemizado - Scroll horizontal solo si es necesario */}
-                            <div class="overflow-x-auto overflow-y-visible">
-                                <table class="w-full text-left table-fixed min-w-[1000px]">
-                                    <thead class="bg-slate-50 border-b border-slate-100 shadow-sm sticky top-0 z-10">
-                                        <tr>
-                                            <th class={thCls} style={{width:'50px'}}>Ítem</th>
-                                            <th class={thCls} style={{width:'auto'}}>Descripción</th>
-                                            <th class={thCls} style={{width:'120px'}}>Concepto</th>
-                                            <th class={thCls} style={{width:'100px'}}>Resp.</th>
-                                            <th class={thCls} style={{width:'60px', textAlign:'center'}}>Unid.</th>
-                                            <th class={thCls} style={{width:'80px', textAlign:'right'}}>Cant.</th>
-                                            <th class={thCls} style={{width:'80px', textAlign:'right'}}>HH Tot.</th>
-                                            <th class={thCls} style={{width:'90px', textAlign:'right'}}>P. Unit.</th>
-                                            <th class={thCls} style={{width:'80px', textAlign:'right'}}>Rend.</th>
-                                            <th class={thCls} style={{width:'100px', textAlign:'right'}}>P. Total</th>
-                                            <th class={thCls} style={{width:'100px', textAlign:'right', backgroundColor: '#fdf2f2', color: '#dc2626'}}>Ava. Fisico</th>
-                                            <th class={thCls} style={{width:'100px', textAlign:'right', backgroundColor: '#f5f3ff', color: '#7c3aed'}}>HH Ganadas</th>
-                                            <th class={thCls} style={{width:'100px', textAlign:'center'}}>Acciones</th>
-                                        </tr>
-                                    </thead>
+                            {/* Dummy Scrollbar Superior */}
+                            <div 
+                                class="overflow-x-auto overflow-y-hidden sticky top-0 z-20 bg-slate-50"
+                                ref={topScrollRef} 
+                                onScroll={handleTopScroll}
+                            >
+                                <div style={{ height: '1px', width: isEstadoPago ? '1900px' : '1300px' }}></div>
+                            </div>
+
+                            {/* Tabla de Itemizado - Scroll horizontal solo si es necesario */}
+                            <div 
+                                class="overflow-x-auto overflow-y-visible"
+                                ref={tableScrollRef}
+                                onScroll={handleTableScroll}
+                            >
+                                <table class={`w-full text-left table-fixed ${isEstadoPago ? 'min-w-[1900px]' : 'min-w-[1300px]'}`}>
+                                    {isEstadoPago ? (
+                                        <thead class="bg-slate-50 border-b border-slate-100 shadow-sm sticky top-[14px] z-10">
+                                            <tr>
+                                                <th rowSpan={2} class={thCls} style={{width:'50px'}}>Ítem</th>
+                                                <th rowSpan={2} class={thCls} style={{width:'auto', minWidth:'250px'}}>Descripción</th>
+                                                <th rowSpan={2} class={thCls} style={{width:'150px'}}>Concepto</th>
+                                                <th rowSpan={2} class={thCls} style={{width:'100px'}}>Resp.</th>
+                                                <th rowSpan={2} class={thCls} style={{width:'60px', textAlign:'center'}}>Unid.</th>
+                                                <th rowSpan={2} class={thCls} style={{width:'80px', textAlign:'right'}}>Cant.</th>
+                                                <th rowSpan={2} class={thCls} style={{width:'80px', textAlign:'right'}}>HH Tot.</th>
+                                                <th rowSpan={2} class={thCls} style={{width:'90px', textAlign:'right'}}>P. Unit.</th>
+                                                <th rowSpan={2} class={thCls} style={{width:'80px', textAlign:'right'}}>Rend.</th>
+                                                <th rowSpan={2} class={thCls} style={{width:'100px', textAlign:'right'}}>P. Total</th>
+                                                <th rowSpan={2} class={thCls} style={{width:'100px', textAlign:'right', backgroundColor: '#fdf2f2', color: '#dc2626'}}>Ava. Fisico</th>
+                                                <th rowSpan={2} class={thCls} style={{width:'100px', textAlign:'right', backgroundColor: '#f5f3ff', color: '#7c3aed'}}>HH Ganadas</th>
+                                                
+                                                <th colSpan={3} class={`${thCls} text-center border-x border-slate-200`} style={{backgroundColor: '#e5e7eb'}}>Acumulado Estado de Pago Actual ($)</th>
+                                                <th colSpan={2} class={`${thCls} text-center border-r border-slate-200`} style={{backgroundColor: '#d1d5db'}}>Acumulado Estado de Pago Anterior ($)</th>
+                                                <th colSpan={2} class={`${thCls} text-center border-r border-slate-200`} style={{backgroundColor: '#e5e7eb'}}>Presente Estado de Pago ($)</th>
+                                                
+                                                <th rowSpan={2} class={thCls} style={{width:'100px', textAlign:'center'}}>Acciones</th>
+                                            </tr>
+                                            <tr>
+                                                <th class={`${thCls} border-l border-slate-200`} style={{width:'80px', textAlign:'center', backgroundColor: '#f3f4f6'}}>Avance %</th>
+                                                <th class={thCls} style={{width:'80px', textAlign:'right', backgroundColor: '#f3f4f6'}}>(a) Cantidad</th>
+                                                <th class={thCls} style={{width:'100px', textAlign:'right', backgroundColor: '#f3f4f6'}}>(b) Valor [$]</th>
+                                                
+                                                <th class={`${thCls} border-l border-slate-300`} style={{width:'80px', textAlign:'right', backgroundColor: '#e5e7eb'}}>(c) Cantidad</th>
+                                                <th class={thCls} style={{width:'100px', textAlign:'right', backgroundColor: '#e5e7eb'}}>(d) Valor [$]</th>
+                                                
+                                                <th class={`${thCls} border-l border-slate-200`} style={{width:'90px', textAlign:'right', backgroundColor: '#f3f4f6'}}>(a-c) = E Cant.</th>
+                                                <th class={`${thCls} border-r border-slate-200`} style={{width:'110px', textAlign:'right', backgroundColor: '#f3f4f6'}}>E x P.U Valor</th>
+                                            </tr>
+                                        </thead>
+                                    ) : (
+                                        <thead class="bg-slate-50 border-b border-slate-100 shadow-sm sticky top-[14px] z-10">
+                                            <tr>
+                                                <th class={thCls} style={{width:'50px'}}>Ítem</th>
+                                                <th class={thCls} style={{width:'auto', minWidth:'250px'}}>Descripción</th>
+                                                <th class={thCls} style={{width:'150px'}}>Concepto</th>
+                                                <th class={thCls} style={{width:'100px'}}>Resp.</th>
+                                                <th class={thCls} style={{width:'60px', textAlign:'center'}}>Unid.</th>
+                                                <th class={thCls} style={{width:'80px', textAlign:'right'}}>Cant.</th>
+                                                <th class={thCls} style={{width:'80px', textAlign:'right'}}>HH Tot.</th>
+                                                <th class={thCls} style={{width:'90px', textAlign:'right'}}>P. Unit.</th>
+                                                <th class={thCls} style={{width:'80px', textAlign:'right'}}>Rend.</th>
+                                                <th class={thCls} style={{width:'100px', textAlign:'right'}}>P. Total</th>
+                                                <th class={thCls} style={{width:'100px', textAlign:'right', backgroundColor: '#fdf2f2', color: '#dc2626'}}>Ava. Fisico</th>
+                                                <th class={thCls} style={{width:'100px', textAlign:'right', backgroundColor: '#f5f3ff', color: '#7c3aed'}}>HH Ganadas</th>
+                                                <th class={thCls} style={{width:'100px', textAlign:'center'}}>Acciones</th>
+                                            </tr>
+                                        </thead>
+                                    )}
                                     <tbody class="divide-y divide-slate-50">
                                         {itemizado.map((row) => {
                                             const itemStr = String(row['Item']).trim();
@@ -2778,10 +2900,10 @@
                                             ) : (
                                                 <tr key={row._id} class={`hover:opacity-90 transition-all group ${rowBg}`}>
                                                     <td class={`${tdCls} font-mono font-bold text-center ${fontSize} ${level === 0 ? 'text-white' : itemColor}`}>{row['Item']}</td>
-                                                    <td class={`${tdCls} ${textWeight} ${textColor} ${fontSize} truncate ${indent}`} title={row['Descripcion_Item']}>
+                                                    <td class={`${tdCls} ${textWeight} ${textColor} ${fontSize} whitespace-normal break-words ${indent}`} title={row['Descripcion_Item']}>
                                                         {row['Descripcion_Item']}
                                                     </td>
-                                                    <td class={`${tdCls} truncate ${level === 0 ? 'text-blue-100 opacity-80' : 'text-slate-500'}`} title={row['Concepto']}>{row['Concepto']}</td>
+                                                    <td class={`${tdCls} whitespace-normal break-words ${level === 0 ? 'text-blue-100 opacity-80' : 'text-slate-500'}`} title={row['Concepto']}>{row['Concepto']}</td>
                                                     <td class={tdCls}><span class={`px-1.5 py-0.5 rounded font-bold text-[8px] uppercase border transition-all ${badgeCls}`}>{row['Responsable']}</span></td>
                                                     <td class={tdCls + " text-center"}><span class={`px-1.5 py-0.5 rounded font-bold text-[8px] border transition-all ${unitCls}`}>{row['Unidad_Medida']}</span></td>
                                                     <td class={`${tdCls} text-right font-bold ${textColor}`}>{fmtNum(row['_CantidadNum'])}</td>
@@ -2791,6 +2913,57 @@
                                                     <td class={`${tdCls} text-right font-extrabold ${priceColor}`}>{fmtMoney(row['_TotalCalc'])}</td>
                                                     <td class={`${tdCls} text-right font-black text-red-600 bg-red-50/20`}>{fmtNum(row['_AvanceFisico'] || 0)}</td>
                                                     <td class={`${tdCls} text-right font-black text-purple-600 bg-purple-50/20`}>{fmtNum(row['_HHGanadas'] || 0)}</td>
+                                                    
+                                                    {isEstadoPago && (
+                                                        <>
+                                                            <td class={`${tdCls} border-l border-slate-200 bg-slate-50 p-1`}>
+                                                                {level === 0 ? <div class="text-right font-bold text-slate-500">-</div> : (
+                                                                    <input 
+                                                                        type="number" 
+                                                                        step="0.01"
+                                                                        class="w-full text-right text-xs bg-white border border-slate-300 rounded px-1 py-0.5 outline-none focus:border-blue-500" 
+                                                                        value={row['_EPA_AvancePct'] !== undefined ? row['_EPA_AvancePct'] : ''}
+                                                                        onChange={e => handleEPAEdit(row._id, '_EPA_AvancePct', e.target.value)}
+                                                                    />
+                                                                )}
+                                                            </td>
+                                                            <td class={`${tdCls} bg-slate-50 p-1`}>
+                                                                {level === 0 ? <div class="text-right font-bold text-slate-500">-</div> : (
+                                                                    <input 
+                                                                        type="number" 
+                                                                        class="w-full text-right text-xs bg-white border border-slate-300 rounded px-1 py-0.5 outline-none focus:border-blue-500" 
+                                                                        value={row['_EPA_CantActual'] !== undefined ? row['_EPA_CantActual'] : ''}
+                                                                        onChange={e => handleEPAEdit(row._id, '_EPA_CantActual', e.target.value)}
+                                                                    />
+                                                                )}
+                                                            </td>
+                                                            <td class={`${tdCls} text-right font-bold bg-slate-50 ${level === 0 ? 'text-slate-700' : 'text-slate-600'}`}>
+                                                                {fmtMoney(row['_EPA_ValorActual'] || 0)}
+                                                            </td>
+
+                                                            <td class={`${tdCls} border-l border-slate-300 bg-slate-100 p-1`}>
+                                                                {level === 0 ? <div class="text-right font-bold text-slate-500">-</div> : (
+                                                                    <input 
+                                                                        type="number" 
+                                                                        class="w-full text-right text-xs bg-white border border-slate-300 rounded px-1 py-0.5 outline-none focus:border-blue-500" 
+                                                                        value={row['_EPA_CantAnterior'] !== undefined ? row['_EPA_CantAnterior'] : ''}
+                                                                        onChange={e => handleEPAEdit(row._id, '_EPA_CantAnterior', e.target.value)}
+                                                                    />
+                                                                )}
+                                                            </td>
+                                                            <td class={`${tdCls} text-right font-bold bg-slate-100 ${level === 0 ? 'text-slate-700' : 'text-slate-600'}`}>
+                                                                {fmtMoney(row['_EPA_ValorAnterior'] || 0)}
+                                                            </td>
+
+                                                            <td class={`${tdCls} border-l border-slate-200 text-right font-bold bg-slate-50`}>
+                                                                {level === 0 ? <div class="text-right font-bold text-slate-500">-</div> : fmtNum(row['_EPA_CantPresente'] || 0)}
+                                                            </td>
+                                                            <td class={`${tdCls} border-r border-slate-200 text-right font-extrabold text-blue-700 bg-blue-50/30`}>
+                                                                {fmtMoney(row['_EPA_ValorPresente'] || 0)}
+                                                            </td>
+                                                        </>
+                                                    )}
+
                                                     <td class={tdCls + " text-center"}>
                                                         <div class="flex gap-1 justify-center opacity-40 group-hover:opacity-100 transition-opacity">
                                                             <button class={`${level === 0 ? 'text-white hover:text-amber-300' : 'text-amber-600 hover:bg-amber-50'} p-1 rounded transition-colors`} onClick={() => setEditRowId(row._id)} title="Editar">✏️</button>
@@ -9619,6 +9792,994 @@ const LogAdicionalesPage = ({ proyectos, showSuccess, askConfirm }) => {
     );
 };
 
+// === MÓDULO: EstadoDePagoPage ===
+const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorProyecto, updateItemizadosGlobal, actividades, unidades }) => {
+    const { useState } = React;
+    const [activeTab, setActiveTab] = useState('caratula');
+    const [obraSeleccionadaDetalle, setObraSeleccionadaDetalle] = useState('');
+    const [itemSeleccionadoDetalle, setItemSeleccionadoDetalle] = useState('');
+    
+    // Estado base para demostración de la carátula global
+    const [formData, setFormData] = useLocalStorageState('app_estado_pago_form', {
+        cliente: {
+            razonSocial: 'Celulosa Arauco y Constitución S.A.',
+            giro: 'Fabricación de Pulpa de Madera',
+            rut: '93.458.000-1',
+            direccion: 'Av. El Golf N° 150, Piso 14, Las Condes, Santiago.',
+            casilla: 'dte.cl@einvoicing.signature-cloud.com'
+        },
+        contrato: {
+            nombre: 'Construcción y Montaje MAT , Proyecto Piloto IP3 + TCF',
+            denominacion: 'C001678-014',
+            pedido: '4700066093',
+            ubicacion: 'Planta Valdivia'
+        },
+        resumen: {
+            numero: '06',
+            revision: '3',
+            fechaInicio: '2025-04-01',
+            fechaFin: '2025-04-30'
+        },
+        detalles: [
+            { glosa: 'INSTALACIÓN DE FAENAS', contratoBase: '$ 125.350.246', acumuladoFecha: '$ 91.760.798', pctAvance: '73,20%', acumuladoAnterior: '$ 86.782.763', presente: '$ 4.978.035' },
+            { glosa: 'OBRAS CIVILES', contratoBase: '$ 875.062.911', acumuladoFecha: '$ 553.207.849', pctAvance: '63,22%', acumuladoAnterior: '$ 478.029.112', presente: '$ 75.178.737' },
+            { glosa: 'REPOSICIÓN Y CONSTRUCCIÓN DE RADIERES Y CANALETAS', contratoBase: '$ 7.267.615', acumuladoFecha: '$ 0', pctAvance: '0,00%', acumuladoAnterior: '$ 0', presente: '$ 0' },
+            { glosa: 'CONSTRUCCIÓN PRETIL Y PEDESTALES', contratoBase: '$ 11.902.634', acumuladoFecha: '$ 1.719.350', pctAvance: '14,45%', acumuladoAnterior: '$ 1.042.128', presente: '$ 677.222' },
+            { glosa: 'DEMOLICIÓN DE PRETILES Y OBRAS PROVISORIAS', contratoBase: '$ 23.335.463', acumuladoFecha: '$ 0', pctAvance: '0,00%', acumuladoAnterior: '$ 0', presente: '$ 0' },
+            { glosa: 'REPOSICIÓN DE CAMINO', contratoBase: '$ 16.035.774', acumuladoFecha: '$ 670.680', pctAvance: '4,18%', acumuladoAnterior: '$ 670.680', presente: '$ 0' },
+            { glosa: 'MONTAJE ESTANQUE DE DESCARGA # 3', contratoBase: '$ 1.175.670.184', acumuladoFecha: '$ 171.423.141', pctAvance: '14,58%', acumuladoAnterior: '$ 98.700.917', presente: '$ 72.722.224' },
+            { glosa: 'OBRAS CIVILES Y UNDERGROUND', contratoBase: '$ 305.103.584', acumuladoFecha: '$ 51.635.576', pctAvance: '16,92%', acumuladoAnterior: '$ 51.635.576', presente: '$ 0' },
+            { glosa: 'CAÑERÍAS', contratoBase: '$ 20.681.594', acumuladoFecha: '$ 11.505.433', pctAvance: '55,63%', acumuladoAnterior: '$ 11.505.433', presente: '$ 0' },
+            { glosa: 'MALLA DE TIERRA', contratoBase: '$ 11.622.300', acumuladoFecha: '$ 9.086.025', pctAvance: '78,18%', acumuladoAnterior: '$ 9.086.025', presente: '$ 0' }
+        ],
+        totales: {
+            costoDirecto: { contratoBase: '$ 2.572.032.304', acumuladoFecha: '$ 891.008.852', pctAvance: '34,64%', acumuladoAnterior: '$ 737.452.634', presente: '$ 153.556.218' },
+            costoIndirecto: { contratoBase: '$ 2.177.967.696', acumuladoFecha: '$ 754.496.160', pctAvance: '34,64%', acumuladoAnterior: '$ 624.466.501', presente: '$ 130.029.659' },
+            totalAvance: { contratoBase: '$ 4.750.000.000', acumuladoFecha: '$ 1.645.505.012', pctAvance: '34,64%', acumuladoAnterior: '$ 1.361.919.135', presente: '$ 283.585.877' }
+        },
+        ajustes: {
+            subTotalNeto: { acumuladoFecha: '$ 1.645.505.012', acumuladoAnterior: '$ 1.361.919.135', presente: '$ 283.585.877' },
+            noIncrementan: { acumuladoFecha: '$ 6.879.847', acumuladoAnterior: '$ 5.723.964', presente: '$ 1.155.883' },
+            reajusteIpc: { pct: '2,20%', presente: '$ 6.264.319' },
+            reajusteAcumulado: { acumuladoFecha: '$ 23.029.747', acumuladoAnterior: '$ 16.765.428', presente: '' },
+            totalEstadoPago: { acumuladoFecha: '$ 1.675.414.606', acumuladoAnterior: '$ 1.384.408.527', presente: '$ 291.006.079' },
+            retencion: { pct: '5,00%', presente: '$ 14.550.304' },
+            totalNeto: { presente: '$ 276.455.775' },
+            iva: { pct: '19,00%', presente: '$ 52.526.597' },
+            total: { presente: '$ 328.982.372' }
+        },
+        titulos: {
+            t1: 'TOTAL COSTO DIRECTO',
+            t2: 'TOTAL COSTO INDIRECTO',
+            t3: 'TOTAL AVANCE ESTADO DE PAGO',
+            t4: 'SUB TOTAL NETO',
+            t5: 'AUMENTOS / DISMINUCIONES QUE NO INCREMENTAN COSTOS INDIRECTOS',
+            t6: 'Reajuste IPC',
+            t7: 'Reajuste Acumulado',
+            t8: 'TOTAL ESTADO DE PAGO',
+            t9: 'Retención',
+            t10: 'TOTAL NETO',
+            t11: 'I.V.A.',
+            t12: 'TOTAL'
+        },
+        footer: {
+            retencionPesos: '',
+            valorUf: '',
+            retencionUf: ''
+        },
+        firmas: {
+            admin: '',
+            jefeProyecto: '',
+            jefeContratos: '',
+            subGerenteContratos: '',
+            subGerenteConstruccion: '',
+            gerenteConstruccion: ''
+        }
+    });
+
+    const formatCurrencyOnInput = (val) => {
+        let isNegative = val.startsWith('-');
+        let clean = val.replace(/[^\d]/g, '');
+        if (!clean) return isNegative ? '-' : '';
+        const num = parseInt(clean, 10);
+        return (isNegative ? '-$ ' : '$ ') + new Intl.NumberFormat('es-CL').format(num);
+    };
+
+    const formatPctOnInput = (val) => {
+        let clean = val.replace(/[^\d,]/g, '');
+        if (!clean) return '';
+        return clean.endsWith('%') ? clean : clean + '%';
+    };
+
+    const handleDetalleChange = (index, field, value, type = 'text') => {
+        let finalValue = value;
+        if (type === 'money') finalValue = formatCurrencyOnInput(value);
+        if (type === 'pct') finalValue = formatPctOnInput(value);
+        
+        const newDetalles = [...formData.detalles];
+        newDetalles[index][field] = finalValue;
+        setFormData({ ...formData, detalles: newDetalles });
+    };
+
+    const handleTotalChange = (categoria, field, value, type = 'text') => {
+        let finalValue = value;
+        if (type === 'money') finalValue = formatCurrencyOnInput(value);
+        if (type === 'pct') finalValue = formatPctOnInput(value);
+
+        setFormData({
+            ...formData,
+            totales: {
+                ...formData.totales,
+                [categoria]: {
+                    ...formData.totales[categoria],
+                    [field]: finalValue
+                }
+            }
+        });
+    };
+
+    const handleAjusteChange = (categoria, field, value, type = 'text') => {
+        let finalValue = value;
+        if (type === 'money') finalValue = formatCurrencyOnInput(value);
+        if (type === 'pct') finalValue = formatPctOnInput(value);
+
+        setFormData({
+            ...formData,
+            ajustes: {
+                ...formData.ajustes,
+                [categoria]: {
+                    ...formData.ajustes[categoria],
+                    [field]: finalValue
+                }
+            }
+        });
+    };
+
+    const handleTituloChange = (field, value) => {
+        setFormData({
+            ...formData,
+            titulos: {
+                ...formData.titulos,
+                [field]: value
+            }
+        });
+    };
+
+    const handleDeclaracionChange = (field, value) => {
+        setFormData({
+            ...formData,
+            declaracion: {
+                ...(formData.declaracion || {}),
+                [field]: value
+            }
+        });
+    };
+
+    const handleReclamacionesChange = (field, value) => {
+        setFormData({
+            ...formData,
+            reclamaciones: {
+                ...(formData.reclamaciones || {}),
+                [field]: value
+            }
+        });
+    };
+
+    const handleReclamacionesItemChange = (index, field, value) => {
+        const items = [...(formData.reclamaciones?.items || [])];
+        if (!items[index]) items[index] = {};
+        items[index][field] = value;
+        handleReclamacionesChange('items', items);
+    };
+
+    const addReclamacionItem = () => {
+        const items = [...(formData.reclamaciones?.items || [])];
+        items.push({ item: items.length + 1, descripcion: '', respaldo: '', presupuesto: '' });
+        handleReclamacionesChange('items', items);
+    };
+    
+    // Inicializar items si está vacío al renderizar
+    if (!formData.reclamaciones?.items || formData.reclamaciones.items.length === 0) {
+        if (!formData.reclamaciones) formData.reclamaciones = {};
+        formData.reclamaciones.items = Array(6).fill(null).map((_, i) => ({ item: i + 1, descripcion: '', respaldo: '', presupuesto: '' }));
+    }
+
+    const handleHojaVidaChange = (field, value) => {
+        if (!obraSeleccionadaDetalle || !itemSeleccionadoDetalle) return;
+        const key = `${obraSeleccionadaDetalle}_${itemSeleccionadoDetalle}`;
+        
+        setFormData(prev => {
+            const hv = prev.hojasDeVida || {};
+            const currentHv = hv[key] || {};
+            return {
+                ...prev,
+                hojasDeVida: {
+                    ...hv,
+                    [key]: { ...currentHv, [field]: value }
+                }
+            };
+        });
+    };
+
+    const handleHojaControlChange = (index, field, value) => {
+        if (!obraSeleccionadaDetalle || !itemSeleccionadoDetalle) return;
+        const key = `${obraSeleccionadaDetalle}_${itemSeleccionadoDetalle}`;
+        
+        setFormData(prev => {
+            const hv = prev.hojasDeVida || {};
+            const currentHv = hv[key] || {};
+            const controles = [...(currentHv.controles || Array(10).fill({}))];
+            
+            if (!controles[index]) controles[index] = {};
+            controles[index] = { ...controles[index], [field]: value };
+            
+            return {
+                ...prev,
+                hojasDeVida: {
+                    ...hv,
+                    [key]: { ...currentHv, controles }
+                }
+            };
+        });
+    };
+
+    const selectItemDetalle = (itemId) => {
+        setItemSeleccionadoDetalle(itemId);
+        const key = `${obraSeleccionadaDetalle}_${itemId}`;
+        
+        const partida = (itemizadosPorProyecto[obraSeleccionadaDetalle] || []).find(p => p.Item === itemId || p._id === itemId);
+        
+        if (partida) {
+            setFormData(prev => {
+                const hv = prev.hojasDeVida || {};
+                const current = hv[key] || {};
+                
+                // Si no existe, o si existe pero no tiene descripcion, lo llenamos/actualizamos
+                if (!current.descripcion || !current.unidad) {
+                    return {
+                        ...prev,
+                        hojasDeVida: {
+                            ...hv,
+                            [key]: {
+                                ...current, // mantener lo que ya hayan escrito
+                                item: current.item || partida.Item || partida.item || '',
+                                descripcion: current.descripcion || partida.Descripcion_Item || partida.Descripcion || partida.descripcion || '',
+                                cantidadPresupuesto: current.cantidadPresupuesto || partida.Cantidad || partida.cantidad || '',
+                                unidad: current.unidad || partida.Unidad_Medida || partida.Unidad || partida.unidad || '',
+                                precioUnitario: current.precioUnitario || partida.Precio_Unitario || partida.precio_unitario || partida.PrecioUnitario || '',
+                                precioTotal: current.precioTotal || partida._TotalCalc || partida.Total || partida.total || 0,
+                                contratoNombre: current.contratoNombre || prev.contrato?.nombre || '',
+                                contratoNum: current.contratoNum || prev.contrato?.denominacion || '',
+                                mandante: current.mandante || prev.cliente?.razonSocial || '',
+                                constructor: current.constructor || 'ECHEVERRIA IZQUIERDO MONTAJES INDUSTRIALES S.A',
+                                edpNum: current.edpNum || '6',
+                                revision: current.revision || '0',
+                                mes: current.mes || 'Abril',
+                                anio: current.anio || '2025',
+                                descPartida: current.descPartida || partida.Descripcion_Item || partida.Descripcion || partida.descripcion || '',
+                                controles: current.controles || Array(10).fill({})
+                            }
+                        }
+                    };
+                }
+                return prev;
+            });
+        }
+    };
+
+    const formatMoney = (val) => {
+        if (val === null || val === undefined || val === '') return '-';
+        return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(val).replace('CLP', '$').trim();
+    };
+    const formatPct = (val) => {
+        if (val === null || val === undefined || val === '') return '-';
+        return val.toFixed(2).replace('.', ',') + '%';
+    };
+
+    return (
+        <div class="h-full flex flex-col space-y-4 animate-in fade-in duration-500">
+            {/* Header con Tabs */}
+            <div class="bg-white rounded-2xl p-2 border border-slate-200 shadow-sm flex items-center justify-between">
+                <div class="flex gap-2">
+                    <button 
+                        onClick={() => setActiveTab('caratula')}
+                        class={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 flex items-center gap-2 ${activeTab === 'caratula' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-500 hover:bg-slate-50'}`}
+                    >
+                        📄 Carátula Global
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('listaA')}
+                        class={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 flex items-center gap-2 ${activeTab === 'listaA' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-500 hover:bg-slate-50'}`}
+                    >
+                        📋 Lista A
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('declaracion')}
+                        class={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 flex items-center gap-2 ${activeTab === 'declaracion' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-500 hover:bg-slate-50'}`}
+                    >
+                        📝 Declaración
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('reclamaciones')}
+                        class={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 flex items-center gap-2 ${activeTab === 'reclamaciones' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-500 hover:bg-slate-50'}`}
+                    >
+                        ⚠️ Reclamaciones
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('detalle')}
+                        class={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 flex items-center gap-2 ${activeTab === 'detalle' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-500 hover:bg-slate-50'}`}
+                    >
+                        📋 Detalle de Avances
+                    </button>
+                </div>
+                <div class="px-4">
+                    <button onClick={() => showSuccess('Estado de Pago guardado exitosamente')} class="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md shadow-emerald-500/30 transition-colors flex items-center gap-2">
+                        <span>💾</span> Guardar Estado de Pago
+                    </button>
+                </div>
+            </div>
+
+            {/* Contenido */}
+            <div class="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                {activeTab === 'listaA' && (
+                    <div class="h-full flex-1 overflow-auto bg-slate-50 relative p-6">
+                        <PartidasPage
+                            proyectos={proyectos}
+                            askConfirm={askConfirm}
+                            showSuccess={showSuccess}
+                            onVolver={() => setActiveTab('caratula')}
+                            updateItemizadosGlobal={updateItemizadosGlobal}
+                            itemizadosPorProyecto={itemizadosPorProyecto}
+                            actividades={actividades}
+                            unidades={unidades}
+                            isEstadoPago={true}
+                        />
+                    </div>
+                )}
+                {activeTab === 'declaracion' && (
+                    <div class="p-6 overflow-y-auto h-[calc(100vh-220px)] custom-scrollbar flex justify-center bg-slate-100">
+                        <div class="w-full max-w-4xl bg-white shadow-lg p-16 border border-slate-200 relative flex flex-col justify-between" style={{ minHeight: '1000px' }}>
+                            <div>
+                                {/* ENCABEZADO */}
+                                <div class="text-center font-bold text-[13px] mb-16 flex flex-col items-center">
+                                    <input type="text" value={formData.declaracion?.titulo1 ?? 'PLANTA PILOTO IP3 + TCF'} onChange={e => handleDeclaracionChange('titulo1', e.target.value)} class="text-center w-full outline-none hover:bg-slate-50 focus:bg-yellow-50 font-bold" />
+                                    <input type="text" value={formData.declaracion?.titulo2 ?? 'PLANTA VALDIVIA'} onChange={e => handleDeclaracionChange('titulo2', e.target.value)} class="text-center w-full outline-none hover:bg-slate-50 focus:bg-yellow-50 font-bold text-blue-900" />
+                                    <input type="text" value={formData.declaracion?.contrato ?? 'Contrato C001678-014'} onChange={e => handleDeclaracionChange('contrato', e.target.value)} class="text-center w-full outline-none hover:bg-slate-50 focus:bg-yellow-50 font-bold" />
+                                    <input type="text" value={formData.declaracion?.estadoPago ?? 'Estado Pago N° 06 Rev 3'} onChange={e => handleDeclaracionChange('estadoPago', e.target.value)} class="text-center w-full outline-none hover:bg-slate-50 focus:bg-yellow-50 font-black text-[15px]" />
+                                </div>
+
+                                {/* TITULO */}
+                                <div class="text-center font-black text-lg mb-16">
+                                    <input type="text" value={formData.declaracion?.tituloFormulario ?? 'DECLARACIÓN FORMAL'} onChange={e => handleDeclaracionChange('tituloFormulario', e.target.value)} class="text-center w-full outline-none hover:bg-slate-50 focus:bg-yellow-50 uppercase font-black" />
+                                </div>
+
+                                {/* CUERPO TEXTO */}
+                                <div class="mb-12">
+                                    <textarea 
+                                        value={formData.declaracion?.cuerpo ?? 'Mediante el presente documento Echeverría Izquierdo declara que la obra ejecutada y los materiales incorporados incluidos en el presente Estado de Pago, correspondiente al mes de abril 2025, están libres y exentos de todo embargo, litigio, prohibición, gravamen y preferencia. Al mismo tiempo declara que no existe ninguna demanda con respecto a la cual se pudiere establecer una obligación derivada de la ejecución de la obra.'}
+                                        onChange={e => handleDeclaracionChange('cuerpo', e.target.value)}
+                                        class="w-full min-h-[250px] outline-none text-[13px] text-justify resize-none hover:bg-slate-50 focus:bg-yellow-50 leading-relaxed font-medium"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* FIRMA Y FECHA (Bottom) */}
+                            <div class="mt-20 flex justify-between items-end">
+                                {/* Fecha izquierda */}
+                                <div class="w-1/3">
+                                    <input type="text" value={formData.declaracion?.fecha ?? 'miércoles, 15 de julio de 2026'} onChange={e => handleDeclaracionChange('fecha', e.target.value)} class="w-full text-[13px] font-medium outline-none hover:bg-slate-50 focus:bg-yellow-50" />
+                                </div>
+
+                                {/* Firma derecha */}
+                                <div class="w-1/3 text-center flex flex-col items-center">
+                                    <input type="text" value={formData.declaracion?.firmaNombre ?? 'Cristian Sepúlveda G.'} onChange={e => handleDeclaracionChange('firmaNombre', e.target.value)} class="w-full text-center text-[14px] font-black outline-none hover:bg-slate-50 focus:bg-yellow-50 pb-0.5" />
+                                    <div class="w-[80%] border-t-[1.5px] border-slate-900 my-0.5"></div>
+                                    <input type="text" value={formData.declaracion?.firmaCargo ?? 'Administrador de Contrato'} onChange={e => handleDeclaracionChange('firmaCargo', e.target.value)} class="w-full text-center text-[13px] font-black outline-none hover:bg-slate-50 focus:bg-yellow-50 pb-0.5" />
+                                    <div class="w-[80%] border-t border-slate-400 my-0.5 opacity-50"></div>
+                                    <input type="text" value={formData.declaracion?.firmaEmpresa ?? 'EIMISA'} onChange={e => handleDeclaracionChange('firmaEmpresa', e.target.value)} class="w-full text-center text-[13px] font-black outline-none hover:bg-slate-50 focus:bg-yellow-50" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {activeTab === 'caratula' && (
+                    <div class="p-6 overflow-y-auto h-[calc(100vh-220px)] custom-scrollbar flex justify-center">
+                        <div class="w-full max-w-5xl">
+                            {/* Cabecera Informe estilo documento */}
+                            <div class="border-2 border-slate-800 p-1 mb-4 bg-white text-slate-900 shadow-lg" style={{fontFamily: 'Arial, sans-serif'}}>
+                                
+                                {/* Cliente */}
+                                <div class="border-b-2 border-slate-800 pb-2 mb-2">
+                                    <h3 class="text-center font-black text-lg tracking-widest uppercase mb-2 border-b-2 border-slate-800 pb-1">CLIENTE</h3>
+                                    <div class="grid grid-cols-[250px_10px_1fr] gap-y-1 text-xs font-bold px-2">
+                                        <div>Razón Social</div><div>:</div><div><input type="text" value={formData.cliente.razonSocial} onChange={(e) => setFormData({...formData, cliente: {...formData.cliente, razonSocial: e.target.value}})} class="w-full bg-transparent outline-none focus:bg-yellow-50 px-1 border border-transparent focus:border-slate-300" /></div>
+                                        <div>Giro</div><div>:</div><div><input type="text" value={formData.cliente.giro} onChange={(e) => setFormData({...formData, cliente: {...formData.cliente, giro: e.target.value}})} class="w-full bg-transparent outline-none focus:bg-yellow-50 px-1 border border-transparent focus:border-slate-300" /></div>
+                                        <div>Rut</div><div>:</div><div><input type="text" value={formData.cliente.rut} onChange={(e) => setFormData({...formData, cliente: {...formData.cliente, rut: e.target.value}})} class="w-full bg-transparent outline-none focus:bg-yellow-50 px-1 border border-transparent focus:border-slate-300" /></div>
+                                        <div>Dirección Comercial</div><div>:</div><div><input type="text" value={formData.cliente.direccion} onChange={(e) => setFormData({...formData, cliente: {...formData.cliente, direccion: e.target.value}})} class="w-full bg-transparent outline-none focus:bg-yellow-50 px-1 border border-transparent focus:border-slate-300" /></div>
+                                        <div>Casilla documento tributario electrónico</div><div>:</div><div><input type="text" value={formData.cliente.casilla} onChange={(e) => setFormData({...formData, cliente: {...formData.cliente, casilla: e.target.value}})} class="w-full bg-transparent outline-none focus:bg-yellow-50 px-1 border border-transparent focus:border-slate-300" /></div>
+                                    </div>
+                                </div>
+
+                                {/* Contrato */}
+                                <div class="border-b-2 border-slate-800 pb-2 mb-2">
+                                    <h3 class="text-center font-black text-lg tracking-widest uppercase mb-2 border-b-2 border-slate-800 pb-1">CONTRATO</h3>
+                                    <div class="grid grid-cols-[250px_10px_1fr] gap-y-1 text-xs font-bold px-2">
+                                        <div>Nombre</div><div>:</div><div><input type="text" value={formData.contrato.nombre} onChange={(e) => setFormData({...formData, contrato: {...formData.contrato, nombre: e.target.value}})} class="w-full bg-transparent outline-none focus:bg-yellow-50 px-1 border border-transparent focus:border-slate-300" /></div>
+                                        <div>Denominación</div><div>:</div><div><input type="text" value={formData.contrato.denominacion} onChange={(e) => setFormData({...formData, contrato: {...formData.contrato, denominacion: e.target.value}})} class="w-full bg-transparent outline-none focus:bg-yellow-50 px-1 border border-transparent focus:border-slate-300" /></div>
+                                        <div>N° Pedido SAP</div><div>:</div><div><input type="text" value={formData.contrato.pedido} onChange={(e) => setFormData({...formData, contrato: {...formData.contrato, pedido: e.target.value}})} class="w-full bg-transparent outline-none focus:bg-yellow-50 px-1 border border-transparent focus:border-slate-300" /></div>
+                                        <div>Ubicación</div><div>:</div><div><input type="text" value={formData.contrato.ubicacion} onChange={(e) => setFormData({...formData, contrato: {...formData.contrato, ubicacion: e.target.value}})} class="w-full bg-transparent outline-none focus:bg-yellow-50 px-1 border border-transparent focus:border-slate-300" /></div>
+                                    </div>
+                                </div>
+
+                                {/* Resumen */}
+                                <div class="text-center mb-4 mt-6">
+                                    <h2 class="text-[22px] font-black uppercase mb-1">RESUMEN ESTADO DE PAGO N° <input type="text" value={formData.resumen.numero} class="w-16 text-center bg-transparent border-b-2 border-slate-400 outline-none focus:border-blue-500 mx-1" /> Rev <input type="text" value={formData.resumen.revision} class="w-16 text-center bg-transparent border-b-2 border-slate-400 outline-none focus:border-blue-500 mx-1" /></h2>
+                                    <h3 class="text-[16px] font-bold uppercase">AVANCES REALIZADOS PERIODO DEL <input type="date" value={formData.resumen.fechaInicio} class="bg-transparent border-b-2 border-slate-400 outline-none focus:border-blue-500 mx-1" /> AL <input type="date" value={formData.resumen.fechaFin} class="bg-transparent border-b-2 border-slate-400 outline-none focus:border-blue-500 mx-1" /></h3>
+                                </div>
+
+                                {/* Tabla Principal */}
+                                <table class="w-full text-xs font-bold border-collapse border-2 border-slate-800">
+                                    <thead>
+                                        <tr class="bg-slate-50">
+                                            <th class="border-2 border-slate-800 p-2 text-center w-[30%]">GLOSA</th>
+                                            <th class="border-2 border-slate-800 p-2 text-center w-[14%]">CONTRATO<br/>BASE $</th>
+                                            <th class="border-2 border-slate-800 p-2 text-center w-[14%]">ACUMULADO<br/>A LA FECHA $</th>
+                                            <th class="border-2 border-slate-800 p-2 text-center w-[10%]">% AVANCE<br/>ACUMULADO</th>
+                                            <th class="border-2 border-slate-800 p-2 text-center w-[14%]">ACUMULADO<br/>ANTERIOR $</th>
+                                            <th class="border-2 border-slate-800 p-2 text-center w-[18%]">PRESENTE<br/>ESTADO DE PAGO $</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-xs">
+                                        {formData.detalles.map((d, i) => (
+                                            <tr key={i} class="hover:bg-yellow-50 transition-colors">
+                                                <td class="border-2 border-slate-800 px-0 py-0 uppercase"><input type="text" value={d.glosa} onChange={(e) => handleDetalleChange(i, 'glosa', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase" /></td>
+                                                <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={d.contratoBase} onChange={(e) => handleDetalleChange(i, 'contratoBase', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right" /></td>
+                                                <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={d.acumuladoFecha} onChange={(e) => handleDetalleChange(i, 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right" /></td>
+                                                <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={d.pctAvance} onChange={(e) => handleDetalleChange(i, 'pctAvance', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right" /></td>
+                                                <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={d.acumuladoAnterior} onChange={(e) => handleDetalleChange(i, 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right" /></td>
+                                                <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={d.presente} onChange={(e) => handleDetalleChange(i, 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-bold text-slate-900" /></td>
+                                            </tr>
+                                        ))}
+                                        {/* Espacio */}
+                                        <tr><td colSpan="6" class="border-2 border-slate-800 h-2 bg-slate-100"></td></tr>
+                                        
+                                        {/* Subtotales 1 */}
+                                        <tr class="font-black bg-slate-50">
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t1} onChange={(e) => handleTituloChange('t1', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoDirecto.contratoBase} onChange={(e) => handleTotalChange('costoDirecto', 'contratoBase', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoDirecto.acumuladoFecha} onChange={(e) => handleTotalChange('costoDirecto', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoDirecto.pctAvance} onChange={(e) => handleTotalChange('costoDirecto', 'pctAvance', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoDirecto.acumuladoAnterior} onChange={(e) => handleTotalChange('costoDirecto', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoDirecto.presente} onChange={(e) => handleTotalChange('costoDirecto', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black text-slate-900" /></td>
+                                        </tr>
+                                        <tr class="font-black bg-slate-50">
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t2} onChange={(e) => handleTituloChange('t2', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoIndirecto.contratoBase} onChange={(e) => handleTotalChange('costoIndirecto', 'contratoBase', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoIndirecto.acumuladoFecha} onChange={(e) => handleTotalChange('costoIndirecto', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoIndirecto.pctAvance} onChange={(e) => handleTotalChange('costoIndirecto', 'pctAvance', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoIndirecto.acumuladoAnterior} onChange={(e) => handleTotalChange('costoIndirecto', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoIndirecto.presente} onChange={(e) => handleTotalChange('costoIndirecto', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black text-slate-900" /></td>
+                                        </tr>
+                                        <tr class="font-black bg-slate-100">
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t3} onChange={(e) => handleTituloChange('t3', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.totalAvance.contratoBase} onChange={(e) => handleTotalChange('totalAvance', 'contratoBase', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.totalAvance.acumuladoFecha} onChange={(e) => handleTotalChange('totalAvance', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.totalAvance.pctAvance} onChange={(e) => handleTotalChange('totalAvance', 'pctAvance', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.totalAvance.acumuladoAnterior} onChange={(e) => handleTotalChange('totalAvance', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.totalAvance.presente} onChange={(e) => handleTotalChange('totalAvance', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black text-slate-900" /></td>
+                                        </tr>
+
+                                        {/* Espacio */}
+                                        <tr><td colSpan="6" class="border-2 border-slate-800 h-2 bg-white"></td></tr>
+
+                                        {/* Ajustes y Totales Finales */}
+                                        <tr class="font-black bg-slate-50">
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t4} onChange={(e) => handleTituloChange('t4', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.subTotalNeto.acumuladoFecha} onChange={(e) => handleAjusteChange('subTotalNeto', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.subTotalNeto.acumuladoAnterior} onChange={(e) => handleAjusteChange('subTotalNeto', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.subTotalNeto.presente} onChange={(e) => handleAjusteChange('subTotalNeto', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                        </tr>
+                                        <tr><td colSpan="6" class="border-2 border-slate-800 h-2 bg-white"></td></tr>
+                                        <tr class="font-bold">
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t5} onChange={(e) => handleTituloChange('t5', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-bold" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.noIncrementan.acumuladoFecha} onChange={(e) => handleAjusteChange('noIncrementan', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-bold" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.noIncrementan.acumuladoAnterior} onChange={(e) => handleAjusteChange('noIncrementan', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-bold" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.noIncrementan.presente} onChange={(e) => handleAjusteChange('noIncrementan', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-bold" /></td>
+                                        </tr>
+                                        <tr class="font-black">
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t6} onChange={(e) => handleTituloChange('t6', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.reajusteIpc.pct} onChange={(e) => handleAjusteChange('reajusteIpc', 'pct', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.reajusteIpc.presente} onChange={(e) => handleAjusteChange('reajusteIpc', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                        </tr>
+                                        <tr class="font-black">
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t7} onChange={(e) => handleTituloChange('t7', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.reajusteAcumulado.acumuladoFecha} onChange={(e) => handleAjusteChange('reajusteAcumulado', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.reajusteAcumulado.acumuladoAnterior} onChange={(e) => handleAjusteChange('reajusteAcumulado', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"><input type="text" value={formData.ajustes.reajusteAcumulado.presente} onChange={(e) => handleAjusteChange('reajusteAcumulado', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                        </tr>
+                                        <tr><td colSpan="6" class="border-2 border-slate-800 h-2 bg-slate-50"></td></tr>
+                                        <tr class="font-black bg-slate-100">
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t8} onChange={(e) => handleTituloChange('t8', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.totalEstadoPago.acumuladoFecha} onChange={(e) => handleAjusteChange('totalEstadoPago', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.totalEstadoPago.acumuladoAnterior} onChange={(e) => handleAjusteChange('totalEstadoPago', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0 text-slate-900"><input type="text" value={formData.ajustes.totalEstadoPago.presente} onChange={(e) => handleAjusteChange('totalEstadoPago', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                        </tr>
+                                        <tr><td colSpan="6" class="border-2 border-slate-800 h-2 bg-white"></td></tr>
+                                        <tr class="font-black">
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t9} onChange={(e) => handleTituloChange('t9', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white" colSpan="3"></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.retencion.pct} onChange={(e) => handleAjusteChange('retencion', 'pct', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0 text-slate-800"><input type="text" value={formData.ajustes.retencion.presente} onChange={(e) => handleAjusteChange('retencion', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                        </tr>
+                                        <tr><td colSpan="6" class="border-2 border-slate-800 h-1 bg-white"></td></tr>
+                                        <tr class="font-black bg-slate-50">
+                                            <td class="border-2 border-slate-800 px-0 py-0" colSpan="5"><input type="text" value={formData.titulos.t10} onChange={(e) => handleTituloChange('t10', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.totalNeto.presente} onChange={(e) => handleAjusteChange('totalNeto', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                        </tr>
+                                        <tr class="font-black bg-slate-50">
+                                            <td class="border-2 border-slate-800 px-0 py-0" colSpan="4"><input type="text" value={formData.titulos.t11} onChange={(e) => handleTituloChange('t11', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.iva.pct} onChange={(e) => handleAjusteChange('iva', 'pct', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.iva.presente} onChange={(e) => handleAjusteChange('iva', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                        </tr>
+                                        <tr class="font-black bg-slate-200">
+                                            <td class="border-2 border-slate-800 px-0 py-0" colSpan="5"><input type="text" value={formData.titulos.t12} onChange={(e) => handleTituloChange('t12', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-2 uppercase font-black" /></td>
+                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.total.presente} onChange={(e) => handleAjusteChange('total', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-2 text-right font-black" /></td>
+                                        </tr>
+                                        <tr>
+                                            <td colSpan="6" class="px-2 py-0 text-right text-[10px] font-bold text-slate-500">(Uso interno Arauco)</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+
+                                {/* Info Adicional Footer */}
+                                <div class="grid grid-cols-[300px_10px_1fr] gap-y-1 text-xs font-bold px-2 mt-4 mb-4">
+                                    <div>Retención Presente Estado de Pago</div><div>:</div><div class="border-b border-slate-400"><input type="text" class="w-full bg-transparent outline-none px-1 focus:bg-yellow-50" /></div>
+                                    <div>Valor UF a la fecha de la Factura</div><div>:</div><div class="border-b border-slate-400"><input type="text" class="w-full bg-transparent outline-none px-1 focus:bg-yellow-50" /></div>
+                                    <div>Retención Presente Estado de Pago en UF</div><div>:</div><div class="border-b border-slate-400"><input type="text" class="w-full bg-transparent outline-none px-1 focus:bg-yellow-50" /></div>
+                                </div>
+
+                                {/* Firmas */}
+                                <div class="grid grid-cols-6 border-2 border-slate-800 mt-6 min-h-[110px]">
+                                    <div class="border-r-2 border-slate-800 relative flex flex-col justify-end p-2 bg-slate-50">
+                                        <input type="text" value={formData.firmas.admin} onChange={(e) => setFormData({...formData, firmas: {...formData.firmas, admin: e.target.value}})} class="w-full text-center text-[10px] font-bold bg-transparent outline-none mb-1 focus:bg-yellow-50" placeholder="Nombre..." />
+                                        <div class="w-full text-center text-[10px] font-black border-t-2 border-slate-800 pt-1">
+                                            <div>Administrador de Obra</div>
+                                            <div class="mt-2 uppercase text-[9px]">ECHAVERRIA IZQUIERDO<br/>Montajes Industriales</div>
+                                        </div>
+                                    </div>
+                                    <div class="border-r-2 border-slate-800 relative flex flex-col justify-end p-2">
+                                        <input type="text" value={formData.firmas.jefeProyecto} onChange={(e) => setFormData({...formData, firmas: {...formData.firmas, jefeProyecto: e.target.value}})} class="w-full text-center text-[10px] font-bold bg-transparent outline-none mb-1 focus:bg-yellow-50" placeholder="Nombre..." />
+                                        <div class="w-full text-center text-[10px] font-black border-t-2 border-slate-800 pt-1 h-[56px] flex flex-col justify-center">
+                                            Jefe de Proyecto<br/>C. Mayor
+                                        </div>
+                                    </div>
+                                    <div class="border-r-2 border-slate-800 relative flex flex-col justify-end p-2 bg-slate-50">
+                                        <input type="text" value={formData.firmas.jefeContratos} onChange={(e) => setFormData({...formData, firmas: {...formData.firmas, jefeContratos: e.target.value}})} class="w-full text-center text-[10px] font-bold bg-transparent outline-none mb-1 focus:bg-yellow-50" placeholder="Nombre..." />
+                                        <div class="w-full text-center text-[10px] font-black border-t-2 border-slate-800 pt-1 h-[56px] flex flex-col justify-center">
+                                            Jefe de Contratos
+                                        </div>
+                                    </div>
+                                    <div class="border-r-2 border-slate-800 relative flex flex-col justify-end p-2">
+                                        <input type="text" value={formData.firmas.subGerenteContratos} onChange={(e) => setFormData({...formData, firmas: {...formData.firmas, subGerenteContratos: e.target.value}})} class="w-full text-center text-[10px] font-bold bg-transparent outline-none mb-1 focus:bg-yellow-50" placeholder="Nombre..." />
+                                        <div class="w-full text-center text-[10px] font-black border-t-2 border-slate-800 pt-1 h-[56px] flex flex-col justify-center">
+                                            Subgerente de<br/>Contratos
+                                        </div>
+                                    </div>
+                                    <div class="border-r-2 border-slate-800 relative flex flex-col justify-end p-2 bg-slate-50">
+                                        <input type="text" value={formData.firmas.subGerenteConstruccion} onChange={(e) => setFormData({...formData, firmas: {...formData.firmas, subGerenteConstruccion: e.target.value}})} class="w-full text-center text-[10px] font-bold bg-transparent outline-none mb-1 focus:bg-yellow-50" placeholder="Nombre..." />
+                                        <div class="w-full text-center text-[10px] font-black border-t-2 border-slate-800 pt-1 h-[56px] flex flex-col justify-center">
+                                            Subgerente de<br/>Construcción
+                                        </div>
+                                    </div>
+                                    <div class="relative flex flex-col justify-end p-2">
+                                        <input type="text" value={formData.firmas.gerenteConstruccion} onChange={(e) => setFormData({...formData, firmas: {...formData.firmas, gerenteConstruccion: e.target.value}})} class="w-full text-center text-[10px] font-bold bg-transparent outline-none mb-1 focus:bg-yellow-50" placeholder="Nombre..." />
+                                        <div class="w-full text-center text-[10px] font-black border-t-2 border-slate-800 pt-1">
+                                            <div>Gerente de<br/>Construcción</div>
+                                            <div class="mt-2 uppercase text-[9px]">Celulosa Arauco y Constitución S.A.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {activeTab === 'reclamaciones' && (
+                    <div class="p-6 overflow-y-auto h-[calc(100vh-220px)] custom-scrollbar flex justify-center bg-slate-100">
+                        <div class="w-full max-w-5xl bg-white shadow-lg p-16 border border-slate-200 relative flex flex-col justify-between" style={{ minHeight: '1000px' }}>
+                            <div>
+                                {/* ENCABEZADO RECLAMACIONES */}
+                                <div class="text-center font-bold text-[18px] mb-12 uppercase tracking-wide">
+                                    <input type="text" value={formData.reclamaciones?.titulo1 ?? 'LISTADO DE RECLAMACIONES'} onChange={e => handleReclamacionesChange('titulo1', e.target.value)} class="text-center w-full outline-none hover:bg-slate-50 focus:bg-yellow-50 font-extrabold" />
+                                </div>
+                                
+                                <div class="flex gap-4 items-center mb-8 font-bold text-[14px]">
+                                    <span>OBRA:</span>
+                                    <input type="text" value={formData.reclamaciones?.obra ?? 'PLANTA PILOTO IP3 + TCF'} onChange={e => handleReclamacionesChange('obra', e.target.value)} class="flex-1 outline-none hover:bg-slate-50 focus:bg-yellow-50 font-bold" />
+                                </div>
+
+                                <div class="text-center font-bold text-[14px] italic mb-8">
+                                    <input type="text" value={formData.reclamaciones?.estadoPago ?? 'Estado Pago N° 06 Rev 3'} onChange={e => handleReclamacionesChange('estadoPago', e.target.value)} class="text-center w-full outline-none hover:bg-slate-50 focus:bg-yellow-50 italic" />
+                                </div>
+
+                                {/* TABLA DE RECLAMACIONES */}
+                                <table class="w-full text-[13px] border-collapse border border-black mb-4">
+                                    <thead>
+                                        <tr class="bg-gray-100">
+                                            <th class="border border-black p-2 w-[60px] text-center font-bold">Item</th>
+                                            <th class="border border-black p-2 font-bold text-center">Descripción</th>
+                                            <th class="border border-black p-2 w-[220px] text-center font-bold">Respaldo</th>
+                                            <th class="border border-black p-2 w-[180px] text-center font-bold">N° Presupuesto</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {formData.reclamaciones?.items?.map((row, index) => (
+                                            <tr key={index} class="group">
+                                                <td class="border border-black text-center font-bold">
+                                                    <input type="text" value={row.item} onChange={e => handleReclamacionesItemChange(index, 'item', e.target.value)} class="w-full text-center outline-none py-1.5 px-2 hover:bg-slate-50 focus:bg-yellow-50" />
+                                                </td>
+                                                <td class="border border-black">
+                                                    <input type="text" value={row.descripcion} onChange={e => handleReclamacionesItemChange(index, 'descripcion', e.target.value)} class="w-full outline-none py-1.5 px-2 hover:bg-slate-50 focus:bg-yellow-50" />
+                                                </td>
+                                                <td class="border border-black">
+                                                    <input type="text" value={row.respaldo} onChange={e => handleReclamacionesItemChange(index, 'respaldo', e.target.value)} class="w-full text-center outline-none py-1.5 px-2 hover:bg-slate-50 focus:bg-yellow-50" />
+                                                </td>
+                                                <td class="border border-black">
+                                                    <input type="text" value={row.presupuesto} onChange={e => handleReclamacionesItemChange(index, 'presupuesto', e.target.value)} class="w-full text-center outline-none py-1.5 px-2 hover:bg-slate-50 focus:bg-yellow-50" />
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                
+                                <div class="flex justify-end">
+                                    <button onClick={addReclamacionItem} class="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded font-bold transition-colors">
+                                        + Agregar Fila
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* FIRMAS RECLAMACIONES */}
+                            <div class="flex justify-end mt-20 pt-10">
+                                <div class="w-72 text-center text-[13px] border-t border-black pt-2 flex flex-col gap-0.5">
+                                    <input type="text" value={formData.reclamaciones?.firmaNombre ?? 'Cristian Sepúlveda G.'} onChange={e => handleReclamacionesChange('firmaNombre', e.target.value)} class="text-center w-full outline-none hover:bg-slate-50 focus:bg-yellow-50" />
+                                    <input type="text" value={formData.reclamaciones?.firmaCargo ?? 'Administrador de Contrato'} onChange={e => handleReclamacionesChange('firmaCargo', e.target.value)} class="text-center w-full outline-none hover:bg-slate-50 focus:bg-yellow-50" />
+                                    <input type="text" value={formData.reclamaciones?.firmaEmpresa ?? 'EIMISA'} onChange={e => handleReclamacionesChange('firmaEmpresa', e.target.value)} class="text-center w-full outline-none hover:bg-slate-50 focus:bg-yellow-50 font-bold" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {activeTab === 'detalle' && (
+                    <div class="p-6 h-[calc(100vh-220px)] bg-slate-100 flex flex-col">
+                        
+                        {/* Controles de Selección */}
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 flex gap-4 shrink-0 items-end">
+                            <div class="flex-1">
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1. Seleccionar Obra</label>
+                                <select 
+                                    class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-medium"
+                                    value={obraSeleccionadaDetalle}
+                                    onChange={e => {
+                                        setObraSeleccionadaDetalle(e.target.value);
+                                        setItemSeleccionadoDetalle('');
+                                    }}
+                                >
+                                    <option value="">-- Seleccione una Obra --</option>
+                                    {proyectos.map(p => (
+                                        <option key={p.id} value={p.id}>{p.nombre}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div class="flex-1">
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">2. Seleccionar Ítem</label>
+                                <select 
+                                    class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-medium disabled:bg-slate-50"
+                                    value={itemSeleccionadoDetalle}
+                                    onChange={e => selectItemDetalle(e.target.value)}
+                                    disabled={!obraSeleccionadaDetalle}
+                                >
+                                    <option value="">-- Seleccione un Ítem --</option>
+                                    {(itemizadosPorProyecto[obraSeleccionadaDetalle] || [])
+                                        .filter(it => it.Item)
+                                        .map(it => (
+                                        <option key={it._id || it.Item} value={it.Item}>{it.Item} - {it.Descripcion}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Hoja de Vida Formulario */}
+                        {!itemSeleccionadoDetalle ? (
+                            <div class="flex-1 flex flex-col items-center justify-center text-slate-400">
+                                <div class="text-4xl mb-3">📄</div>
+                                <p class="font-bold">Seleccione una Obra y un Ítem para cargar su Hoja de Vida</p>
+                            </div>
+                        ) : (
+                            <div class="flex-1 overflow-y-auto custom-scrollbar flex justify-center pb-10">
+                                {(() => {
+                                    const key = `${obraSeleccionadaDetalle}_${itemSeleccionadoDetalle}`;
+                                    const hd = (formData.hojasDeVida && formData.hojasDeVida[key]) ? formData.hojasDeVida[key] : {};
+                                    const inpCls = "w-full outline-none bg-transparent hover:bg-black/5 focus:bg-yellow-100 font-bold px-1";
+                                    const valCls = "w-full outline-none bg-transparent hover:bg-black/5 focus:bg-yellow-100 font-bold text-center px-1";
+                                    
+                                    return (
+                                    <div class="w-full max-w-5xl p-8" style={{ fontFamily: 'Arial, sans-serif' }}>
+                                        {/* Título Principal */}
+                                        <h1 class="text-center font-black text-2xl uppercase tracking-widest mb-6">INFORMACION DE AVANCE</h1>
+                                        
+                                        {/* Bloque 1: Contrato */}
+                                        <div class="grid grid-cols-[150px_1fr_150px_150px] border-y-2 border-black border-dashed mb-6 text-[11px] font-bold">
+                                            <div class="border-r border-black border-dashed p-1 flex flex-col gap-1">
+                                                <div>NOMBRE CONTRATO</div>
+                                                <div>N° CONTRATO</div>
+                                                <div>MANDANTE</div>
+                                                <div>CONSTRUCTOR</div>
+                                            </div>
+                                            <div class="border-r border-black border-dashed p-1 flex flex-col gap-1">
+                                                <input type="text" value={hd.contratoNombre ?? ''} onChange={e => handleHojaVidaChange('contratoNombre', e.target.value)} class={inpCls} />
+                                                <input type="text" value={hd.contratoNum ?? ''} onChange={e => handleHojaVidaChange('contratoNum', e.target.value)} class={inpCls} />
+                                                <input type="text" value={hd.mandante ?? ''} onChange={e => handleHojaVidaChange('mandante', e.target.value)} class={inpCls} />
+                                                <input type="text" value={hd.constructor ?? ''} onChange={e => handleHojaVidaChange('constructor', e.target.value)} class={inpCls} />
+                                            </div>
+                                            <div class="border-r border-black border-dashed p-1 flex flex-col gap-1">
+                                                <div>N° ESTADO DE PAGO</div>
+                                                <div>REVISION</div>
+                                                <div>MES</div>
+                                                <div>AÑO</div>
+                                            </div>
+                                            <div class="p-1 flex flex-col gap-1">
+                                                <input type="text" value={hd.edpNum ?? ''} onChange={e => handleHojaVidaChange('edpNum', e.target.value)} class={valCls} />
+                                                <input type="text" value={hd.revision ?? ''} onChange={e => handleHojaVidaChange('revision', e.target.value)} class={valCls} />
+                                                <input type="text" value={hd.mes ?? ''} onChange={e => handleHojaVidaChange('mes', e.target.value)} class={valCls} />
+                                                <input type="text" value={hd.anio ?? ''} onChange={e => handleHojaVidaChange('anio', e.target.value)} class={valCls} />
+                                            </div>
+                                        </div>
+
+                                        {/* Bloque 2: Item Info */}
+                                        <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[12px] font-black uppercase mb-6 px-4">
+                                            <div class="flex items-center gap-2">
+                                                <span>ITEM:</span>
+                                                <input type="text" value={hd.item ?? ''} onChange={e => handleHojaVidaChange('item', e.target.value)} class={`w-32 outline-none hover:bg-black/5 focus:bg-yellow-100 border-b border-dotted border-black px-1`} />
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <span>DESCRIPCION:</span>
+                                                <input type="text" value={hd.descripcion ?? ''} onChange={e => handleHojaVidaChange('descripcion', e.target.value)} class={`flex-1 outline-none hover:bg-black/5 focus:bg-yellow-100 border-b border-dotted border-black px-1`} />
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <span>CANTIDAD PRESUPUESTO:</span>
+                                                <input type="text" value={hd.cantidadPresupuesto ?? ''} onChange={e => handleHojaVidaChange('cantidadPresupuesto', e.target.value)} class={`w-32 outline-none hover:bg-black/5 focus:bg-yellow-100 border-b border-dotted border-black px-1`} />
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <span>UNIDAD:</span>
+                                                <input type="text" value={hd.unidad ?? ''} onChange={e => handleHojaVidaChange('unidad', e.target.value)} class={`w-24 outline-none hover:bg-black/5 focus:bg-yellow-100 border-b border-dotted border-black px-1`} />
+                                            </div>
+                                        </div>
+
+                                        {/* Bloque 3: Precios */}
+                                        <div class="flex justify-between items-center border-y-2 border-black py-1 font-black text-[12px] uppercase mb-6">
+                                            <div class="flex items-center flex-1">
+                                                <span class="w-48">PRECIO UNITARIO</span>
+                                                <span>$</span>
+                                                <input type="text" value={hd.precioUnitario ?? ''} onChange={e => handleHojaVidaChange('precioUnitario', e.target.value)} class={`w-40 ml-2 outline-none hover:bg-black/5 focus:bg-yellow-100 text-right`} />
+                                            </div>
+                                            <div class="flex items-center flex-1 justify-end">
+                                                <span class="w-32">PRECIO TOTAL</span>
+                                                <span>$</span>
+                                                <input type="text" value={hd.precioTotal ?? ''} onChange={e => handleHojaVidaChange('precioTotal', e.target.value)} class={`w-40 ml-2 outline-none hover:bg-black/5 focus:bg-yellow-100 text-right`} />
+                                            </div>
+                                        </div>
+
+                                        {/* Bloque 4: Ponderaciones */}
+                                        <div class="mb-6 font-bold text-[12px]">
+                                            <div class="font-black mb-4 uppercase">1.0 PONDERACIONES (TOTAL ACUMULADO)</div>
+                                            <div class="grid grid-cols-[1fr_120px_120px_150px] gap-2 uppercase mb-4 text-center items-end">
+                                                <div class="text-left">1.1 PONDERACION PARTIDA</div>
+                                                <div>% PONDERADO</div>
+                                                <div>% AVANCE DEL MES</div>
+                                                <div>% AVANCE ACUMULADO</div>
+                                            </div>
+                                            <div class="grid grid-cols-[1fr_120px_120px_150px] gap-2 mb-6">
+                                                <input type="text" value={hd.descPartida ?? ''} onChange={e => handleHojaVidaChange('descPartida', e.target.value)} class={`${inpCls} text-right pr-4`} />
+                                                <input type="text" value={hd.pctPonderado ?? ''} onChange={e => handleHojaVidaChange('pctPonderado', e.target.value)} class={valCls} />
+                                                <input type="text" value={hd.pctAvanceMes ?? ''} onChange={e => handleHojaVidaChange('pctAvanceMes', e.target.value)} class={valCls} />
+                                                <input type="text" value={hd.pctAvanceAcumulado ?? ''} onChange={e => handleHojaVidaChange('pctAvanceAcumulado', e.target.value)} class={valCls} />
+                                            </div>
+                                            <div class="grid grid-cols-[1fr_270px] gap-2 items-center">
+                                                <div class="font-black uppercase text-center">TOTAL</div>
+                                                <div class="border border-black flex">
+                                                    <input type="text" value={hd.totalPctPonderado ?? ''} onChange={e => handleHojaVidaChange('totalPctPonderado', e.target.value)} class={`flex-1 ${valCls} border-r border-black`} />
+                                                    <input type="text" value={hd.totalPctAvanceMes ?? ''} onChange={e => handleHojaVidaChange('totalPctAvanceMes', e.target.value)} class={`flex-1 ${valCls} border-r border-black`} />
+                                                    <input type="text" value={hd.totalPctAvanceAcumulado ?? ''} onChange={e => handleHojaVidaChange('totalPctAvanceAcumulado', e.target.value)} class={`flex-1 ${valCls}`} />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="border-t-2 border-black w-full mb-6"></div>
+
+                                        {/* Bloque 5: Avances */}
+                                        <div class="mb-8 font-bold text-[12px] uppercase">
+                                            <div class="font-black mb-4">2.0 AVANCES</div>
+                                            <div class="grid grid-cols-[1fr_150px_150px] gap-2 mb-2 text-center">
+                                                <div></div>
+                                                <div>CANTIDAD</div>
+                                                <div>PORCENTAJE</div>
+                                            </div>
+                                            <div class="grid grid-cols-[1fr_150px_150px] gap-2 mb-1">
+                                                <div>2.1 AVANCE FISICO ANTERIOR</div>
+                                                <input type="text" value={hd.cantAvanceAnterior ?? ''} onChange={e => handleHojaVidaChange('cantAvanceAnterior', e.target.value)} class={valCls} />
+                                                <input type="text" value={hd.pctAvanceAnterior ?? ''} onChange={e => handleHojaVidaChange('pctAvanceAnterior', e.target.value)} class={valCls} />
+                                            </div>
+                                            <div class="grid grid-cols-[1fr_150px_150px] gap-2 mb-1">
+                                                <div>2.2 AVANCE FISICO DEL MES</div>
+                                                <input type="text" value={hd.cantAvanceMes ?? ''} onChange={e => handleHojaVidaChange('cantAvanceMes', e.target.value)} class={valCls} />
+                                                <input type="text" value={hd.pctAvanceMes2 ?? ''} onChange={e => handleHojaVidaChange('pctAvanceMes2', e.target.value)} class={valCls} />
+                                            </div>
+                                            <div class="grid grid-cols-[1fr_150px_150px] gap-2 mb-6">
+                                                <div>2.3 AVANCE FISICO ACUMULADO</div>
+                                                <input type="text" value={hd.cantAvanceAcumulado ?? ''} onChange={e => handleHojaVidaChange('cantAvanceAcumulado', e.target.value)} class={valCls} />
+                                                <input type="text" value={hd.pctAvanceAcumulado2 ?? ''} onChange={e => handleHojaVidaChange('pctAvanceAcumulado2', e.target.value)} class={valCls} />
+                                            </div>
+                                            <div class="grid grid-cols-[1fr_300px] gap-2 items-center">
+                                                <div>2.4 AVANCE FINANCIERO</div>
+                                                <div>
+                                                    <div class="grid grid-cols-2 text-center mb-1">
+                                                        <div>ACUMULADO</div>
+                                                        <div>DEL MES</div>
+                                                    </div>
+                                                    <div class="border border-black flex text-center">
+                                                        <div class="flex-1 flex border-r border-black">
+                                                            <span class="pl-1">$</span>
+                                                            <input type="text" value={hd.financieroAcumulado ?? ''} onChange={e => handleHojaVidaChange('financieroAcumulado', e.target.value)} class={`flex-1 ${valCls}`} />
+                                                        </div>
+                                                        <div class="flex-1 flex">
+                                                            <span class="pl-1">$</span>
+                                                            <input type="text" value={hd.financieroDelMes ?? ''} onChange={e => handleHojaVidaChange('financieroDelMes', e.target.value)} class={`flex-1 ${valCls}`} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="border-t-2 border-black w-full mb-6"></div>
+
+                                        {/* Bloque 6: Aprobacion */}
+                                        <div class="mb-12 font-bold text-[12px] uppercase">
+                                            <div class="font-black mb-8 underline">3.0 APROBACION DE AVANCE</div>
+                                            <div class="flex justify-around">
+                                                <div class="border border-black p-4 pt-12 text-center w-64 flex flex-col gap-1">
+                                                    <input type="text" value={hd.firma1Nombre ?? 'Cristian Sepúlveda G.'} onChange={e => handleHojaVidaChange('firma1Nombre', e.target.value)} class={`${valCls} border-t border-black pt-1`} />
+                                                    <input type="text" value={hd.firma1Cargo ?? 'Administrador de Contrato'} onChange={e => handleHojaVidaChange('firma1Cargo', e.target.value)} class={valCls} />
+                                                    <input type="text" value={hd.firma1Empresa ?? 'EIMISA'} onChange={e => handleHojaVidaChange('firma1Empresa', e.target.value)} class={valCls} />
+                                                </div>
+                                                <div class="border border-black p-4 pt-12 text-center w-64 flex flex-col gap-1">
+                                                    <input type="text" value={hd.firma2Nombre ?? 'Alex Sepúlveda Carrasco'} onChange={e => handleHojaVidaChange('firma2Nombre', e.target.value)} class={`${valCls} border-t border-black pt-1`} />
+                                                    <input type="text" value={hd.firma2Cargo ?? 'Administrador de Contrato'} onChange={e => handleHojaVidaChange('firma2Cargo', e.target.value)} class={valCls} />
+                                                    <input type="text" value={hd.firma2Empresa ?? 'GC'} onChange={e => handleHojaVidaChange('firma2Empresa', e.target.value)} class={valCls} />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Segunda Pagina: Hoja de Control */}<h1 class="text-center font-black text-2xl uppercase tracking-widest mb-6 mt-8 border-t-2 border-black pt-8">HOJA DE VIDA DE LA PARTIDA</h1>
+
+                                        {/* Repetición Bloque 1 */}
+                                        <div class="grid grid-cols-[150px_1fr_150px_150px] border-y-2 border-black border-dashed mb-6 text-[11px] font-bold">
+                                            <div class="border-r border-black border-dashed p-1 flex flex-col gap-1">
+                                                <div>NOMBRE CONTRATO</div>
+                                                <div>N° CONTRATO</div>
+                                                <div>MANDANTE</div>
+                                                <div>CONTRATISTA</div>
+                                            </div>
+                                            <div class="border-r border-black border-dashed p-1 flex flex-col gap-1">
+                                                <input type="text" value={hd.contratoNombre ?? ''} onChange={e => handleHojaVidaChange('contratoNombre', e.target.value)} class={inpCls} />
+                                                <input type="text" value={hd.contratoNum ?? ''} onChange={e => handleHojaVidaChange('contratoNum', e.target.value)} class={inpCls} />
+                                                <input type="text" value={hd.mandante ?? ''} onChange={e => handleHojaVidaChange('mandante', e.target.value)} class={inpCls} />
+                                                <input type="text" value={hd.constructor ?? ''} onChange={e => handleHojaVidaChange('constructor', e.target.value)} class={inpCls} />
+                                            </div>
+                                            <div class="border-r border-black border-dashed p-1 flex flex-col gap-1">
+                                                <div>N° ESTADO DE PAGO</div>
+                                                <div>REVISION</div>
+                                                <div>MES</div>
+                                                <div>AÑO</div>
+                                            </div>
+                                            <div class="p-1 flex flex-col gap-1">
+                                                <input type="text" value={hd.edpNum ?? ''} onChange={e => handleHojaVidaChange('edpNum', e.target.value)} class={valCls} />
+                                                <input type="text" value={hd.revision ?? ''} onChange={e => handleHojaVidaChange('revision', e.target.value)} class={valCls} />
+                                                <input type="text" value={hd.mes ?? ''} onChange={e => handleHojaVidaChange('mes', e.target.value)} class={valCls} />
+                                                <input type="text" value={hd.anio ?? ''} onChange={e => handleHojaVidaChange('anio', e.target.value)} class={valCls} />
+                                            </div>
+                                        </div>
+
+                                        {/* Repetición Bloque 2 y 3 */}
+                                        <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[12px] font-black uppercase mb-6 px-4">
+                                            <div class="flex items-center gap-2">
+                                                <span>ITEM:</span>
+                                                <input type="text" value={hd.item ?? ''} onChange={e => handleHojaVidaChange('item', e.target.value)} class={`w-32 outline-none hover:bg-black/5 focus:bg-yellow-100 border-b border-dotted border-black px-1`} />
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <span>DESCRIPCION:</span>
+                                                <input type="text" value={hd.descripcion ?? ''} onChange={e => handleHojaVidaChange('descripcion', e.target.value)} class={`flex-1 outline-none hover:bg-black/5 focus:bg-yellow-100 border-b border-dotted border-black px-1`} />
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <span>CANTIDAD PRESUPUESTO:</span>
+                                                <input type="text" value={hd.cantidadPresupuesto ?? ''} onChange={e => handleHojaVidaChange('cantidadPresupuesto', e.target.value)} class={`w-32 outline-none hover:bg-black/5 focus:bg-yellow-100 border-b border-dotted border-black px-1`} />
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <span>UNIDAD:</span>
+                                                <input type="text" value={hd.unidad ?? ''} onChange={e => handleHojaVidaChange('unidad', e.target.value)} class={`w-24 outline-none hover:bg-black/5 focus:bg-yellow-100 border-b border-dotted border-black px-1`} />
+                                            </div>
+                                        </div>
+
+                                        <div class="flex justify-between items-center border-y-2 border-black py-1 font-black text-[12px] uppercase mb-6">
+                                            <div class="flex items-center flex-1">
+                                                <span class="w-48">PRECIO UNITARIO</span>
+                                                <span>$</span>
+                                                <input type="text" value={hd.precioUnitario ?? ''} onChange={e => handleHojaVidaChange('precioUnitario', e.target.value)} class={`w-40 ml-2 outline-none hover:bg-black/5 focus:bg-yellow-100 text-right`} />
+                                            </div>
+                                            <div class="flex items-center flex-1 justify-end">
+                                                <span class="w-32">PRECIO TOTAL</span>
+                                                <span>$</span>
+                                                <input type="text" value={hd.precioTotal ?? ''} onChange={e => handleHojaVidaChange('precioTotal', e.target.value)} class={`w-40 ml-2 outline-none hover:bg-black/5 focus:bg-yellow-100 text-right`} />
+                                            </div>
+                                        </div>
+
+                                        {/* Hoja de Control Tabla */}
+                                        <div class="font-bold text-[12px] uppercase">
+                                            <div class="font-black mb-4">1.0 HOJA DE CONTROL</div>
+                                            <table class="w-full border-collapse border border-black mb-2">
+                                                <thead>
+                                                    <tr class="bg-gray-300 border border-black text-center">
+                                                        <th class="border border-black p-1 w-1/4">TIPO DE REGISTRO</th>
+                                                        <th class="border border-black p-1 w-1/4">SECTOR</th>
+                                                        <th class="border border-black p-1 w-[15%]">CORRELATIVO</th>
+                                                        <th class="border border-black p-1 w-[15%]">CANTIDAD</th>
+                                                        <th class="border border-black p-1 w-[15%]">EDP N°</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {(hd.controles || Array(10).fill({})).map((row, index) => (
+                                                        <tr key={index} class="border border-black group">
+                                                            <td class="border border-black"><input type="text" value={row.tipoRegistro ?? ''} onChange={e => handleHojaControlChange(index, 'tipoRegistro', e.target.value)} class={valCls} /></td>
+                                                            <td class="border border-black"><input type="text" value={row.sector ?? ''} onChange={e => handleHojaControlChange(index, 'sector', e.target.value)} class={valCls} /></td>
+                                                            <td class="border border-black"><input type="text" value={row.correlativo ?? ''} onChange={e => handleHojaControlChange(index, 'correlativo', e.target.value)} class={valCls} /></td>
+                                                            <td class="border border-black"><input type="text" value={row.cantidad ?? ''} onChange={e => handleHojaControlChange(index, 'cantidad', e.target.value)} class={valCls} /></td>
+                                                            <td class="border border-black"><input type="text" value={row.edpNum ?? ''} onChange={e => handleHojaControlChange(index, 'edpNum', e.target.value)} class={valCls} /></td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                            <div class="flex justify-end">
+                                                <button onClick={() => {
+                                                    const currentControles = hd.controles || Array(10).fill({});
+                                                    handleHojaVidaChange('controles', [...currentControles, {}]);
+                                                }} class="text-[10px] bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-1 rounded font-bold transition-colors">
+                                                    + Agregar Fila
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
         const App = () => {
             const [page, setPage] = useState('Planificacion');
             const [mantenedoresTab, setMantenedoresTab] = useState('estandar');
@@ -10369,6 +11530,7 @@ const LogAdicionalesPage = ({ proyectos, showSuccess, askConfirm }) => {
                                     { id: 'Dashboard', label: 'Dashboard', icon: 'dashboard' },
                                     { id: 'Cubicaciones', label: 'Cubicaciones', icon: 'cubicaciones' },
                                     { id: 'HistoricoEDP', label: 'Histórico EDP', icon: 'status' },
+                                    { id: 'EstadoDePago', label: 'Estado de Pago', icon: 'status' },
                                     { id: 'LogAdicionales', label: 'LOG de Adicionales', icon: 'planificacion' },
                                     { id: 'Planificacion', label: 'Planificación', icon: 'planificacion' },
                                     { id: 'BIM', label: 'BIM', icon: 'bim' },
@@ -10408,7 +11570,7 @@ const LogAdicionalesPage = ({ proyectos, showSuccess, askConfirm }) => {
                     <main class="ml-64 flex-1 flex flex-col">
                         <header class="bg-white border-b border-slate-200 px-10 py-6 flex justify-between items-center sticky top-0 z-[60]">
                             <h1 class="text-2xl font-bold text-slate-800">
-                                {page === 'Unidades' ? 'Unidades de Medida' : page === 'Actividades' ? 'Actividades' : page === 'Especialidades' ? 'Especialidades' : page === 'Usuarios' ? 'Usuarios' : page === 'Roles' ? 'Roles de Sistema' : page === 'Proyectos' ? 'Mantenedor de Proyectos' : page === 'Planificacion' ? 'Planificación' : page === 'MatrizMC' ? 'Matriz MC' : page === 'MantenedorObra' ? 'Mantenedor por Obra' : page === 'ActividadesObra' ? 'Actividades por Obra' : page === 'UnidadesObra' ? 'Unidades por Obra' : page === 'PartidasObra' ? 'Itemizados por Obra' : page === 'HistoricoEDP' ? '📊 Histórico de Estados de Pago' : page === 'LogAdicionales' ? '📋 LOG de Adicionales' : page === 'Suministros' ? 'Suministros' : page === 'BIM' ? 'BIM (Modelado 3D)' : page}
+                                {page === 'Unidades' ? 'Unidades de Medida' : page === 'Actividades' ? 'Actividades' : page === 'Especialidades' ? 'Especialidades' : page === 'Usuarios' ? 'Usuarios' : page === 'Roles' ? 'Roles de Sistema' : page === 'Proyectos' ? 'Mantenedor de Proyectos' : page === 'Planificacion' ? 'Planificación' : page === 'MatrizMC' ? 'Matriz MC' : page === 'MantenedorObra' ? 'Mantenedor por Obra' : page === 'ActividadesObra' ? 'Actividades por Obra' : page === 'UnidadesObra' ? 'Unidades por Obra' : page === 'PartidasObra' ? 'Itemizados por Obra' : page === 'HistoricoEDP' ? '📊 Histórico de Estados de Pago' : page === 'EstadoDePago' ? '📊 Estado de Pago' : page === 'LogAdicionales' ? '📋 LOG de Adicionales' : page === 'Suministros' ? 'Suministros' : page === 'BIM' ? 'BIM (Modelado 3D)' : page}
                             </h1>
                             <div class="flex items-center gap-3">
                                 <button class="bg-slate-50 hover:bg-slate-100 text-slate-600 px-4 py-2 rounded-lg text-xs font-bold border border-slate-200 transition-colors shadow-sm flex items-center gap-2" onClick={handleExportDB}>
@@ -12686,6 +13848,16 @@ const LogAdicionalesPage = ({ proyectos, showSuccess, askConfirm }) => {
                                     askConfirm={askConfirm} 
                                     showSuccess={showSuccess} 
                                 />
+                            ) : page === 'EstadoDePago' ? (
+                                <EstadoDePagoPage 
+                                    proyectos={proyectosInternas} 
+                                    askConfirm={askConfirm} 
+                                    showSuccess={showSuccess} 
+                                    itemizadosPorProyecto={itemizadosPorProyecto}
+                                    updateItemizadosGlobal={updateItemizadosGlobal}
+                                    actividades={actividadesInternas}
+                                    unidades={unidadesInternas}
+                                />
                             ) : page === 'BIM' ? (
                                 <div class="space-y-5 animate-in fade-in duration-500">
                                     {/* ─── BIM Header ─── */}
@@ -12988,3 +14160,5 @@ const LogAdicionalesPage = ({ proyectos, showSuccess, askConfirm }) => {
 </body>
 
 </html>
+
+
