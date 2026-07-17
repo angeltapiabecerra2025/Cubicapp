@@ -13,6 +13,8 @@
     <!-- SheetJS y html2pdf para exportaciones -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -4853,7 +4855,7 @@
                             )}
                             <div ref={tableContainerRef} onScroll={handleBottomScroll} class="overflow-auto flex-1 relative scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-50">
                                 <table ref={tableScrollInnerRef} id="tabla-cubicaciones-main-print" class="w-full text-left table-fixed min-w-max border-collapse border border-slate-300">
-                                    <thead class="bg-slate-700 text-white sticky top-0 z-20 shadow-lg border-b-2 border-slate-800">
+                                    <thead class="bg-slate-700 text-white sticky top-0 z-20 shadow-lg border-b border-slate-800">
                                         <tr class="text-[10px] uppercase font-black text-center divide-x divide-slate-600">
                                             <th class="p-2 w-12 bg-slate-800 text-[9px]" rowSpan={2}>#</th>
                                             <th class="p-2 w-24 bg-slate-800 text-[9px] hide-on-pdf" rowSpan={2}>Acciones</th>
@@ -7150,7 +7152,7 @@
                             )}
                             <div ref={tableContainerRef} onScroll={handleBottomScroll} class="overflow-auto flex-1 relative scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-50">
                                 <table ref={tableScrollInnerRef} id="tabla-cubicaciones-main-print" class="w-full text-left table-fixed min-w-max border-collapse border border-slate-300">
-                                    <thead class="bg-slate-700 text-white sticky top-0 z-20 shadow-lg border-b-2 border-slate-800">
+                                    <thead class="bg-slate-700 text-white sticky top-0 z-20 shadow-lg border-b border-slate-800">
                                         <tr class="text-[10px] uppercase font-black text-center divide-x divide-slate-600">
                                             <th class="p-2 w-12 bg-slate-800 text-[9px]" rowSpan={2}>#</th>
                                             <th class="p-2 w-24 bg-slate-800 text-[9px] hide-on-pdf" rowSpan={2}>Acciones</th>
@@ -10076,6 +10078,141 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
         return val.toFixed(2).replace('.', ',') + '%';
     };
 
+    const exportarCaratulaPDF = async () => {
+        let elementId = 'caratula-pdf-content';
+        let filename = 'Caratula_Global.pdf';
+        
+        if (activeTab === 'declaracion') {
+            elementId = 'declaracion-pdf-content';
+            filename = 'Declaracion.pdf';
+        } else if (activeTab === 'reclamaciones') {
+            elementId = 'reclamaciones-pdf-content';
+            filename = 'Reclamaciones.pdf';
+        } else if (activeTab === 'detalle') {
+            elementId = 'detalle-pdf-content';
+            filename = `Detalle_Avance_${itemSeleccionadoDetalle.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+        }
+
+        const element = document.getElementById(elementId);
+        if (!element) return;
+
+        // 1. Guardar estilos originales para restaurarlos después
+        const originalStyles = new Map();
+        let currentElement = element;
+        
+        while (currentElement && currentElement.tagName !== 'BODY') {
+            originalStyles.set(currentElement, {
+                overflow: currentElement.style.overflow,
+                height: currentElement.style.height,
+                maxHeight: currentElement.style.maxHeight
+            });
+            
+            // Liberar restricciones para que el elemento se muestre completo sin scroll
+            currentElement.style.overflow = 'visible';
+            currentElement.style.height = 'auto';
+            currentElement.style.maxHeight = 'none';
+            
+            currentElement = currentElement.parentElement;
+        }
+
+        // 2. Reemplazar inputs por divs temporalmente (evita bug de html2canvas con inputs blancos)
+        const inputReplacements = [];
+        const inputs = element.querySelectorAll('input, textarea');
+        
+        inputs.forEach(input => {
+            const div = document.createElement('div');
+            div.textContent = input.value;
+            div.className = input.className;
+            
+            // Asegurar alineación sin romper el flujo de texto (inline)
+            div.style.display = 'inline-flex';
+            div.style.alignItems = 'center';
+            if (input.classList.contains('text-center')) {
+                div.style.justifyContent = 'center';
+            } else if (input.classList.contains('text-right')) {
+                div.style.justifyContent = 'flex-end';
+            } else {
+                div.style.justifyContent = 'flex-start';
+            }
+            
+            if (input.tagName.toLowerCase() === 'textarea') {
+                div.style.whiteSpace = 'pre-wrap';
+                div.style.alignItems = 'flex-start';
+            }
+            
+            // Ocultar input real e insertar div falso
+            const originalDisplay = input.style.display;
+            input.style.display = 'none';
+            input.parentNode.insertBefore(div, input);
+            
+            inputReplacements.push({
+                input: input,
+                div: div,
+                originalDisplay: originalDisplay
+            });
+        });
+
+        try {
+            // 3. Renderizar el elemento completo a un canvas
+            const canvas = await html2canvas(element, {
+                scale: 2, // Mayor resolución
+                useCORS: true,
+                scrollY: 0,
+                backgroundColor: '#ffffff'
+            });
+
+            // 4. Crear el documento PDF en A4
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            const pdfWidth = doc.internal.pageSize.getWidth();
+            const pdfHeight = doc.internal.pageSize.getHeight();
+            const margin = 8; // Márgenes de 8mm
+            
+            const usableWidth = pdfWidth - (margin * 2);
+            const usableHeight = pdfHeight - (margin * 2);
+
+            const imgWidth = canvas.width;
+            const imgHeight = canvas.height;
+
+            // 5. Calcular la escala exacta para que quepa sí o sí en UNA página
+            const ratio = Math.min(usableWidth / imgWidth, usableHeight / imgHeight);
+            
+            const finalWidth = imgWidth * ratio;
+            const finalHeight = imgHeight * ratio;
+
+            // Centrar horizontalmente
+            const xOffset = margin + (usableWidth - finalWidth) / 2;
+            const yOffset = margin; // Arriba
+
+            const imgData = canvas.toDataURL('image/jpeg', 0.98);
+            
+            // Insertar la única imagen en el PDF
+            doc.addImage(imgData, 'JPEG', xOffset, yOffset, finalWidth, finalHeight);
+            doc.save(filename);
+
+        } catch (error) {
+            console.error('Error al generar PDF:', error);
+            alert('Hubo un error al generar el PDF.');
+        } finally {
+            // 6. Restaurar el entorno a la normalidad
+            for (const [el, styles] of originalStyles.entries()) {
+                el.style.overflow = styles.overflow;
+                el.style.height = styles.height;
+                el.style.maxHeight = styles.maxHeight;
+            }
+            // Restaurar inputs
+            inputReplacements.forEach(({input, div, originalDisplay}) => {
+                input.style.display = originalDisplay;
+                div.remove();
+            });
+        }
+    };
+
     return (
         <div class="h-full flex flex-col space-y-4 animate-in fade-in duration-500">
             {/* Header con Tabs */}
@@ -10112,9 +10249,14 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                         📋 Detalle de Avances
                     </button>
                 </div>
-                <div class="px-4">
+                <div class="px-4 flex items-center gap-2">
+                    {(activeTab === 'caratula' || activeTab === 'declaracion' || activeTab === 'reclamaciones' || (activeTab === 'detalle' && obraSeleccionadaDetalle && itemSeleccionadoDetalle)) && (
+                        <button onClick={exportarCaratulaPDF} class="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md shadow-red-500/30 transition-colors flex items-center gap-2">
+                            <span>📄</span> Exportar PDF
+                        </button>
+                    )}
                     <button onClick={() => showSuccess('Estado de Pago guardado exitosamente')} class="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md shadow-emerald-500/30 transition-colors flex items-center gap-2">
-                        <span>💾</span> Guardar Estado de Pago
+                        <span>💾</span> Guardar EDP
                     </button>
                 </div>
             </div>
@@ -10138,7 +10280,7 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                 )}
                 {activeTab === 'declaracion' && (
                     <div class="p-6 overflow-y-auto h-[calc(100vh-220px)] custom-scrollbar flex justify-center bg-slate-100">
-                        <div class="w-full max-w-4xl bg-white shadow-lg p-16 border border-slate-200 relative flex flex-col justify-between" style={{ minHeight: '1000px' }}>
+                        <div id="declaracion-pdf-content" class="w-full max-w-4xl bg-white shadow-lg p-16 border border-slate-200 relative flex flex-col justify-between" style={{ minHeight: '1000px' }}>
                             <div>
                                 {/* ENCABEZADO */}
                                 <div class="text-center font-bold text-[13px] mb-16 flex flex-col items-center">
@@ -10184,13 +10326,13 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                 )}
                 {activeTab === 'caratula' && (
                     <div class="p-6 overflow-y-auto h-[calc(100vh-220px)] custom-scrollbar flex justify-center">
-                        <div class="w-full max-w-5xl">
+                        <div class="w-full max-w-5xl" id="caratula-pdf-content">
                             {/* Cabecera Informe estilo documento */}
-                            <div class="border-2 border-slate-800 p-1 mb-4 bg-white text-slate-900 shadow-lg" style={{fontFamily: 'Arial, sans-serif'}}>
+                            <div class="border border-slate-800 p-1 mb-4 bg-white text-slate-900 shadow-lg" style={{fontFamily: 'Arial, sans-serif'}}>
                                 
                                 {/* Cliente */}
-                                <div class="border-b-2 border-slate-800 pb-2 mb-2">
-                                    <h3 class="text-center font-black text-lg tracking-widest uppercase mb-2 border-b-2 border-slate-800 pb-1">CLIENTE</h3>
+                                <div class="border-b border-slate-800 pb-2 mb-2">
+                                    <h3 class="text-center font-black text-lg tracking-widest uppercase mb-2 border-b border-slate-800 pb-1">CLIENTE</h3>
                                     <div class="grid grid-cols-[250px_10px_1fr] gap-y-1 text-xs font-bold px-2">
                                         <div>Razón Social</div><div>:</div><div><input type="text" value={formData.cliente.razonSocial} onChange={(e) => setFormData({...formData, cliente: {...formData.cliente, razonSocial: e.target.value}})} class="w-full bg-transparent outline-none focus:bg-yellow-50 px-1 border border-transparent focus:border-slate-300" /></div>
                                         <div>Giro</div><div>:</div><div><input type="text" value={formData.cliente.giro} onChange={(e) => setFormData({...formData, cliente: {...formData.cliente, giro: e.target.value}})} class="w-full bg-transparent outline-none focus:bg-yellow-50 px-1 border border-transparent focus:border-slate-300" /></div>
@@ -10201,8 +10343,8 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                                 </div>
 
                                 {/* Contrato */}
-                                <div class="border-b-2 border-slate-800 pb-2 mb-2">
-                                    <h3 class="text-center font-black text-lg tracking-widest uppercase mb-2 border-b-2 border-slate-800 pb-1">CONTRATO</h3>
+                                <div class="border-b border-slate-800 pb-2 mb-2">
+                                    <h3 class="text-center font-black text-lg tracking-widest uppercase mb-2 border-b border-slate-800 pb-1">CONTRATO</h3>
                                     <div class="grid grid-cols-[250px_10px_1fr] gap-y-1 text-xs font-bold px-2">
                                         <div>Nombre</div><div>:</div><div><input type="text" value={formData.contrato.nombre} onChange={(e) => setFormData({...formData, contrato: {...formData.contrato, nombre: e.target.value}})} class="w-full bg-transparent outline-none focus:bg-yellow-50 px-1 border border-transparent focus:border-slate-300" /></div>
                                         <div>Denominación</div><div>:</div><div><input type="text" value={formData.contrato.denominacion} onChange={(e) => setFormData({...formData, contrato: {...formData.contrato, denominacion: e.target.value}})} class="w-full bg-transparent outline-none focus:bg-yellow-50 px-1 border border-transparent focus:border-slate-300" /></div>
@@ -10213,128 +10355,128 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
 
                                 {/* Resumen */}
                                 <div class="text-center mb-4 mt-6">
-                                    <h2 class="text-[22px] font-black uppercase mb-1">RESUMEN ESTADO DE PAGO N° <input type="text" value={formData.resumen.numero} class="w-16 text-center bg-transparent border-b-2 border-slate-400 outline-none focus:border-blue-500 mx-1" /> Rev <input type="text" value={formData.resumen.revision} class="w-16 text-center bg-transparent border-b-2 border-slate-400 outline-none focus:border-blue-500 mx-1" /></h2>
-                                    <h3 class="text-[16px] font-bold uppercase">AVANCES REALIZADOS PERIODO DEL <input type="date" value={formData.resumen.fechaInicio} class="bg-transparent border-b-2 border-slate-400 outline-none focus:border-blue-500 mx-1" /> AL <input type="date" value={formData.resumen.fechaFin} class="bg-transparent border-b-2 border-slate-400 outline-none focus:border-blue-500 mx-1" /></h3>
+                                    <h2 class="text-[22px] font-black uppercase mb-1">RESUMEN ESTADO DE PAGO N° <input type="text" value={formData.resumen.numero} class="w-16 text-center bg-transparent border-b border-slate-400 outline-none focus:border-blue-500 mx-1" /> Rev <input type="text" value={formData.resumen.revision} class="w-16 text-center bg-transparent border-b border-slate-400 outline-none focus:border-blue-500 mx-1" /></h2>
+                                    <h3 class="text-[16px] font-bold uppercase">AVANCES REALIZADOS PERIODO DEL <input type="date" value={formData.resumen.fechaInicio} class="bg-transparent border-b border-slate-400 outline-none focus:border-blue-500 mx-1" /> AL <input type="date" value={formData.resumen.fechaFin} class="bg-transparent border-b border-slate-400 outline-none focus:border-blue-500 mx-1" /></h3>
                                 </div>
 
                                 {/* Tabla Principal */}
-                                <table class="w-full text-xs font-bold border-collapse border-2 border-slate-800">
+                                <table class="w-full text-xs font-bold border-collapse border border-slate-800">
                                     <thead>
                                         <tr class="bg-slate-50">
-                                            <th class="border-2 border-slate-800 p-2 text-center w-[30%]">GLOSA</th>
-                                            <th class="border-2 border-slate-800 p-2 text-center w-[14%]">CONTRATO<br/>BASE $</th>
-                                            <th class="border-2 border-slate-800 p-2 text-center w-[14%]">ACUMULADO<br/>A LA FECHA $</th>
-                                            <th class="border-2 border-slate-800 p-2 text-center w-[10%]">% AVANCE<br/>ACUMULADO</th>
-                                            <th class="border-2 border-slate-800 p-2 text-center w-[14%]">ACUMULADO<br/>ANTERIOR $</th>
-                                            <th class="border-2 border-slate-800 p-2 text-center w-[18%]">PRESENTE<br/>ESTADO DE PAGO $</th>
+                                            <th class="border border-slate-800 p-2 text-center w-[30%]">GLOSA</th>
+                                            <th class="border border-slate-800 p-2 text-center w-[14%]">CONTRATO<br/>BASE $</th>
+                                            <th class="border border-slate-800 p-2 text-center w-[14%]">ACUMULADO<br/>A LA FECHA $</th>
+                                            <th class="border border-slate-800 p-2 text-center w-[10%]">% AVANCE<br/>ACUMULADO</th>
+                                            <th class="border border-slate-800 p-2 text-center w-[14%]">ACUMULADO<br/>ANTERIOR $</th>
+                                            <th class="border border-slate-800 p-2 text-center w-[18%]">PRESENTE<br/>ESTADO DE PAGO $</th>
                                         </tr>
                                     </thead>
                                     <tbody class="text-xs">
                                         {formData.detalles.map((d, i) => (
                                             <tr key={i} class="hover:bg-yellow-50 transition-colors">
-                                                <td class="border-2 border-slate-800 px-0 py-0 uppercase"><input type="text" value={d.glosa} onChange={(e) => handleDetalleChange(i, 'glosa', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase" /></td>
-                                                <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={d.contratoBase} onChange={(e) => handleDetalleChange(i, 'contratoBase', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right" /></td>
-                                                <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={d.acumuladoFecha} onChange={(e) => handleDetalleChange(i, 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right" /></td>
-                                                <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={d.pctAvance} onChange={(e) => handleDetalleChange(i, 'pctAvance', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right" /></td>
-                                                <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={d.acumuladoAnterior} onChange={(e) => handleDetalleChange(i, 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right" /></td>
-                                                <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={d.presente} onChange={(e) => handleDetalleChange(i, 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-bold text-slate-900" /></td>
+                                                <td class="border border-slate-800 px-0 py-0 uppercase"><input type="text" value={d.glosa} onChange={(e) => handleDetalleChange(i, 'glosa', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase" /></td>
+                                                <td class="border border-slate-800 px-0 py-0"><input type="text" value={d.contratoBase} onChange={(e) => handleDetalleChange(i, 'contratoBase', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right" /></td>
+                                                <td class="border border-slate-800 px-0 py-0"><input type="text" value={d.acumuladoFecha} onChange={(e) => handleDetalleChange(i, 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right" /></td>
+                                                <td class="border border-slate-800 px-0 py-0"><input type="text" value={d.pctAvance} onChange={(e) => handleDetalleChange(i, 'pctAvance', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right" /></td>
+                                                <td class="border border-slate-800 px-0 py-0"><input type="text" value={d.acumuladoAnterior} onChange={(e) => handleDetalleChange(i, 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right" /></td>
+                                                <td class="border border-slate-800 px-0 py-0"><input type="text" value={d.presente} onChange={(e) => handleDetalleChange(i, 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-bold text-slate-900" /></td>
                                             </tr>
                                         ))}
                                         {/* Espacio */}
-                                        <tr><td colSpan="6" class="border-2 border-slate-800 h-2 bg-slate-100"></td></tr>
+                                        <tr><td colSpan="6" class="border border-slate-800 h-2 bg-slate-100"></td></tr>
                                         
                                         {/* Subtotales 1 */}
                                         <tr class="font-black bg-slate-50">
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t1} onChange={(e) => handleTituloChange('t1', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoDirecto.contratoBase} onChange={(e) => handleTotalChange('costoDirecto', 'contratoBase', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoDirecto.acumuladoFecha} onChange={(e) => handleTotalChange('costoDirecto', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoDirecto.pctAvance} onChange={(e) => handleTotalChange('costoDirecto', 'pctAvance', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoDirecto.acumuladoAnterior} onChange={(e) => handleTotalChange('costoDirecto', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoDirecto.presente} onChange={(e) => handleTotalChange('costoDirecto', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black text-slate-900" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t1} onChange={(e) => handleTituloChange('t1', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoDirecto.contratoBase} onChange={(e) => handleTotalChange('costoDirecto', 'contratoBase', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoDirecto.acumuladoFecha} onChange={(e) => handleTotalChange('costoDirecto', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoDirecto.pctAvance} onChange={(e) => handleTotalChange('costoDirecto', 'pctAvance', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoDirecto.acumuladoAnterior} onChange={(e) => handleTotalChange('costoDirecto', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoDirecto.presente} onChange={(e) => handleTotalChange('costoDirecto', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black text-slate-900" /></td>
                                         </tr>
                                         <tr class="font-black bg-slate-50">
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t2} onChange={(e) => handleTituloChange('t2', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoIndirecto.contratoBase} onChange={(e) => handleTotalChange('costoIndirecto', 'contratoBase', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoIndirecto.acumuladoFecha} onChange={(e) => handleTotalChange('costoIndirecto', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoIndirecto.pctAvance} onChange={(e) => handleTotalChange('costoIndirecto', 'pctAvance', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoIndirecto.acumuladoAnterior} onChange={(e) => handleTotalChange('costoIndirecto', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoIndirecto.presente} onChange={(e) => handleTotalChange('costoIndirecto', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black text-slate-900" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t2} onChange={(e) => handleTituloChange('t2', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoIndirecto.contratoBase} onChange={(e) => handleTotalChange('costoIndirecto', 'contratoBase', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoIndirecto.acumuladoFecha} onChange={(e) => handleTotalChange('costoIndirecto', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoIndirecto.pctAvance} onChange={(e) => handleTotalChange('costoIndirecto', 'pctAvance', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoIndirecto.acumuladoAnterior} onChange={(e) => handleTotalChange('costoIndirecto', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.totales.costoIndirecto.presente} onChange={(e) => handleTotalChange('costoIndirecto', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black text-slate-900" /></td>
                                         </tr>
                                         <tr class="font-black bg-slate-100">
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t3} onChange={(e) => handleTituloChange('t3', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.totalAvance.contratoBase} onChange={(e) => handleTotalChange('totalAvance', 'contratoBase', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.totalAvance.acumuladoFecha} onChange={(e) => handleTotalChange('totalAvance', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.totalAvance.pctAvance} onChange={(e) => handleTotalChange('totalAvance', 'pctAvance', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.totalAvance.acumuladoAnterior} onChange={(e) => handleTotalChange('totalAvance', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.totales.totalAvance.presente} onChange={(e) => handleTotalChange('totalAvance', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black text-slate-900" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t3} onChange={(e) => handleTituloChange('t3', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.totales.totalAvance.contratoBase} onChange={(e) => handleTotalChange('totalAvance', 'contratoBase', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.totales.totalAvance.acumuladoFecha} onChange={(e) => handleTotalChange('totalAvance', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.totales.totalAvance.pctAvance} onChange={(e) => handleTotalChange('totalAvance', 'pctAvance', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.totales.totalAvance.acumuladoAnterior} onChange={(e) => handleTotalChange('totalAvance', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.totales.totalAvance.presente} onChange={(e) => handleTotalChange('totalAvance', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black text-slate-900" /></td>
                                         </tr>
 
                                         {/* Espacio */}
-                                        <tr><td colSpan="6" class="border-2 border-slate-800 h-2 bg-white"></td></tr>
+                                        <tr><td colSpan="6" class="border border-slate-800 h-2 bg-white"></td></tr>
 
                                         {/* Ajustes y Totales Finales */}
                                         <tr class="font-black bg-slate-50">
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t4} onChange={(e) => handleTituloChange('t4', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.subTotalNeto.acumuladoFecha} onChange={(e) => handleAjusteChange('subTotalNeto', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.subTotalNeto.acumuladoAnterior} onChange={(e) => handleAjusteChange('subTotalNeto', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.subTotalNeto.presente} onChange={(e) => handleAjusteChange('subTotalNeto', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t4} onChange={(e) => handleTituloChange('t4', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.subTotalNeto.acumuladoFecha} onChange={(e) => handleAjusteChange('subTotalNeto', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.subTotalNeto.acumuladoAnterior} onChange={(e) => handleAjusteChange('subTotalNeto', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.subTotalNeto.presente} onChange={(e) => handleAjusteChange('subTotalNeto', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
                                         </tr>
-                                        <tr><td colSpan="6" class="border-2 border-slate-800 h-2 bg-white"></td></tr>
+                                        <tr><td colSpan="6" class="border border-slate-800 h-2 bg-white"></td></tr>
                                         <tr class="font-bold">
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t5} onChange={(e) => handleTituloChange('t5', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-bold" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.noIncrementan.acumuladoFecha} onChange={(e) => handleAjusteChange('noIncrementan', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-bold" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.noIncrementan.acumuladoAnterior} onChange={(e) => handleAjusteChange('noIncrementan', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-bold" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.noIncrementan.presente} onChange={(e) => handleAjusteChange('noIncrementan', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-bold" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t5} onChange={(e) => handleTituloChange('t5', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-bold" /></td>
+                                            <td class="border border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.noIncrementan.acumuladoFecha} onChange={(e) => handleAjusteChange('noIncrementan', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-bold" /></td>
+                                            <td class="border border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.noIncrementan.acumuladoAnterior} onChange={(e) => handleAjusteChange('noIncrementan', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-bold" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.noIncrementan.presente} onChange={(e) => handleAjusteChange('noIncrementan', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-bold" /></td>
                                         </tr>
                                         <tr class="font-black">
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t6} onChange={(e) => handleTituloChange('t6', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.reajusteIpc.pct} onChange={(e) => handleAjusteChange('reajusteIpc', 'pct', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.reajusteIpc.presente} onChange={(e) => handleAjusteChange('reajusteIpc', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t6} onChange={(e) => handleTituloChange('t6', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.reajusteIpc.pct} onChange={(e) => handleAjusteChange('reajusteIpc', 'pct', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.reajusteIpc.presente} onChange={(e) => handleAjusteChange('reajusteIpc', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
                                         </tr>
                                         <tr class="font-black">
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t7} onChange={(e) => handleTituloChange('t7', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.reajusteAcumulado.acumuladoFecha} onChange={(e) => handleAjusteChange('reajusteAcumulado', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.reajusteAcumulado.acumuladoAnterior} onChange={(e) => handleAjusteChange('reajusteAcumulado', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"><input type="text" value={formData.ajustes.reajusteAcumulado.presente} onChange={(e) => handleAjusteChange('reajusteAcumulado', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t7} onChange={(e) => handleTituloChange('t7', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.reajusteAcumulado.acumuladoFecha} onChange={(e) => handleAjusteChange('reajusteAcumulado', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.reajusteAcumulado.acumuladoAnterior} onChange={(e) => handleAjusteChange('reajusteAcumulado', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0 bg-white"><input type="text" value={formData.ajustes.reajusteAcumulado.presente} onChange={(e) => handleAjusteChange('reajusteAcumulado', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
                                         </tr>
-                                        <tr><td colSpan="6" class="border-2 border-slate-800 h-2 bg-slate-50"></td></tr>
+                                        <tr><td colSpan="6" class="border border-slate-800 h-2 bg-slate-50"></td></tr>
                                         <tr class="font-black bg-slate-100">
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t8} onChange={(e) => handleTituloChange('t8', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.totalEstadoPago.acumuladoFecha} onChange={(e) => handleAjusteChange('totalEstadoPago', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white"></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.totalEstadoPago.acumuladoAnterior} onChange={(e) => handleAjusteChange('totalEstadoPago', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0 text-slate-900"><input type="text" value={formData.ajustes.totalEstadoPago.presente} onChange={(e) => handleAjusteChange('totalEstadoPago', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t8} onChange={(e) => handleTituloChange('t8', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.totalEstadoPago.acumuladoFecha} onChange={(e) => handleAjusteChange('totalEstadoPago', 'acumuladoFecha', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0 bg-white"></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.totalEstadoPago.acumuladoAnterior} onChange={(e) => handleAjusteChange('totalEstadoPago', 'acumuladoAnterior', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0 text-slate-900"><input type="text" value={formData.ajustes.totalEstadoPago.presente} onChange={(e) => handleAjusteChange('totalEstadoPago', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
                                         </tr>
-                                        <tr><td colSpan="6" class="border-2 border-slate-800 h-2 bg-white"></td></tr>
+                                        <tr><td colSpan="6" class="border border-slate-800 h-2 bg-white"></td></tr>
                                         <tr class="font-black">
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t9} onChange={(e) => handleTituloChange('t9', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0 bg-white" colSpan="3"></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.retencion.pct} onChange={(e) => handleAjusteChange('retencion', 'pct', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0 text-slate-800"><input type="text" value={formData.ajustes.retencion.presente} onChange={(e) => handleAjusteChange('retencion', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.titulos.t9} onChange={(e) => handleTituloChange('t9', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0 bg-white" colSpan="3"></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.retencion.pct} onChange={(e) => handleAjusteChange('retencion', 'pct', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0 text-slate-800"><input type="text" value={formData.ajustes.retencion.presente} onChange={(e) => handleAjusteChange('retencion', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
                                         </tr>
-                                        <tr><td colSpan="6" class="border-2 border-slate-800 h-1 bg-white"></td></tr>
+                                        <tr><td colSpan="6" class="border border-slate-800 h-1 bg-white"></td></tr>
                                         <tr class="font-black bg-slate-50">
-                                            <td class="border-2 border-slate-800 px-0 py-0" colSpan="5"><input type="text" value={formData.titulos.t10} onChange={(e) => handleTituloChange('t10', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.totalNeto.presente} onChange={(e) => handleAjusteChange('totalNeto', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0" colSpan="5"><input type="text" value={formData.titulos.t10} onChange={(e) => handleTituloChange('t10', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.totalNeto.presente} onChange={(e) => handleAjusteChange('totalNeto', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
                                         </tr>
                                         <tr class="font-black bg-slate-50">
-                                            <td class="border-2 border-slate-800 px-0 py-0" colSpan="4"><input type="text" value={formData.titulos.t11} onChange={(e) => handleTituloChange('t11', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.iva.pct} onChange={(e) => handleAjusteChange('iva', 'pct', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.iva.presente} onChange={(e) => handleAjusteChange('iva', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0" colSpan="4"><input type="text" value={formData.titulos.t11} onChange={(e) => handleTituloChange('t11', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 uppercase font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.iva.pct} onChange={(e) => handleAjusteChange('iva', 'pct', e.target.value, 'pct')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.iva.presente} onChange={(e) => handleAjusteChange('iva', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-1 text-right font-black" /></td>
                                         </tr>
                                         <tr class="font-black bg-slate-200">
-                                            <td class="border-2 border-slate-800 px-0 py-0" colSpan="5"><input type="text" value={formData.titulos.t12} onChange={(e) => handleTituloChange('t12', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-2 uppercase font-black" /></td>
-                                            <td class="border-2 border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.total.presente} onChange={(e) => handleAjusteChange('total', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-2 text-right font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0" colSpan="5"><input type="text" value={formData.titulos.t12} onChange={(e) => handleTituloChange('t12', e.target.value)} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-2 uppercase font-black" /></td>
+                                            <td class="border border-slate-800 px-0 py-0"><input type="text" value={formData.ajustes.total.presente} onChange={(e) => handleAjusteChange('total', 'presente', e.target.value, 'money')} class="w-full h-full bg-transparent outline-none focus:bg-yellow-100 px-2 py-2 text-right font-black" /></td>
                                         </tr>
                                         <tr>
                                             <td colSpan="6" class="px-2 py-0 text-right text-[10px] font-bold text-slate-500">(Uso interno Arauco)</td>
@@ -10350,7 +10492,7 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                                 </div>
 
                                 {/* Firmas */}
-                                <div class="grid grid-cols-6 border-2 border-slate-800 mt-6 min-h-[110px]">
+                                <div class="grid grid-cols-6 border border-slate-800 mt-6 min-h-[110px]">
                                     <div class="border-r-2 border-slate-800 relative flex flex-col justify-end p-2 bg-slate-50">
                                         <input type="text" value={formData.firmas.admin} onChange={(e) => setFormData({...formData, firmas: {...formData.firmas, admin: e.target.value}})} class="w-full text-center text-[10px] font-bold bg-transparent outline-none mb-1 focus:bg-yellow-50" placeholder="Nombre..." />
                                         <div class="w-full text-center text-[10px] font-black border-t-2 border-slate-800 pt-1">
@@ -10396,7 +10538,7 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                 )}
                 {activeTab === 'reclamaciones' && (
                     <div class="p-6 overflow-y-auto h-[calc(100vh-220px)] custom-scrollbar flex justify-center bg-slate-100">
-                        <div class="w-full max-w-5xl bg-white shadow-lg p-16 border border-slate-200 relative flex flex-col justify-between" style={{ minHeight: '1000px' }}>
+                        <div id="reclamaciones-pdf-content" class="w-full max-w-5xl bg-white shadow-lg p-16 border border-slate-200 relative flex flex-col justify-between" style={{ minHeight: '1000px' }}>
                             <div>
                                 {/* ENCABEZADO RECLAMACIONES */}
                                 <div class="text-center font-bold text-[18px] mb-12 uppercase tracking-wide">
@@ -10514,7 +10656,7 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                                     const valCls = "w-full outline-none bg-transparent hover:bg-black/5 focus:bg-yellow-100 font-bold text-center px-1";
                                     
                                     return (
-                                    <div class="w-full max-w-5xl p-8" style={{ fontFamily: 'Arial, sans-serif' }}>
+                                    <div id="detalle-pdf-content" class="w-full max-w-5xl p-8" style={{ fontFamily: 'Arial, sans-serif' }}>
                                         {/* Título Principal */}
                                         <h1 class="text-center font-black text-2xl uppercase tracking-widest mb-6">INFORMACION DE AVANCE</h1>
                                         
@@ -13539,7 +13681,7 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                                                     </div>
                                                     <div class="overflow-x-auto">
                                                         <table class="w-full text-left table-fixed min-w-[800px]">
-                                                            <thead class="bg-[#d1e0f0] text-[10px] font-bold text-slate-800 border-b-2 border-slate-400">
+                                                            <thead class="bg-[#d1e0f0] text-[10px] font-bold text-slate-800 border-b border-slate-400">
                                                                 <tr>
                                                                     <th class="p-2 border border-[#94b8df] w-20 text-center">ID Task</th>
                                                                     <th class="p-2 border border-[#94b8df] w-20 text-center">Sub ID</th>
