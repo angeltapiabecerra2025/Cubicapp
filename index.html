@@ -9924,7 +9924,6 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                                                 </div>
                                             </div>
 
-                                        <div class="p-8">
                                             {/* Bloque 4: Ponderaciones */}
                                         <div class="mb-6 font-bold text-[12px]">
                                             <div class="font-black mb-4 uppercase">1.0 PONDERACIONES (TOTAL ACUMULADO)</div>
@@ -10079,7 +10078,6 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                                                 </div>
                                             </div>
 
-                                        <div class="p-8 pt-0">
                                             {/* Hoja de Control Tabla */}
                                         <div class="font-bold text-[12px] uppercase">
                                             <div class="font-black mb-4">1.0 HOJA DE CONTROL</div>
@@ -10110,12 +10108,9 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                                                     const currentControles = hd.controles || Array(10).fill({});
                                                     handleHojaVidaChange('controles', [...currentControles, {}]);
                                                 }} class="text-[10px] bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-1 rounded font-bold transition-colors">
-                                                    + Agregar Fila
                                                 </button>
                                             </div>
                                         </div>
-
-                                    </div>
                                     </div>
                                     );
                                 })()}
@@ -10124,7 +10119,6 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                     </div>
                 )}
             </div>
-        </div>
         </div>
     );
 };
