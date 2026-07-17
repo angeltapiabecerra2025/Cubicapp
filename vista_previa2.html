@@ -10090,7 +10090,7 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
             filename = 'Reclamaciones.pdf';
         } else if (activeTab === 'detalle') {
             elementId = 'detalle-pdf-content';
-            filename = `Detalle_Avance_${itemSeleccionadoDetalle.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+            filename = 'Detalle_Avance_' + itemSeleccionadoDetalle + '.pdf';
         }
 
         const element = document.getElementById(elementId);
@@ -10250,7 +10250,7 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                     </button>
                 </div>
                 <div class="px-4 flex items-center gap-2">
-                    {(activeTab === 'caratula' || activeTab === 'declaracion' || activeTab === 'reclamaciones' || (activeTab === 'detalle' && obraSeleccionadaDetalle && itemSeleccionadoDetalle)) && (
+                    {(activeTab === 'caratula' || activeTab === 'declaracion' || activeTab === 'reclamaciones' || (activeTab === 'detalle' && obraSeleccionadaDetalle !== '' && itemSeleccionadoDetalle !== '')) && (
                         <button onClick={exportarCaratulaPDF} class="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md shadow-red-500/30 transition-colors flex items-center gap-2">
                             <span>📄</span> Exportar PDF
                         </button>
