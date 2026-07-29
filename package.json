@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@babel/standalone": "^7.23.6",
+    "jsdom": "^29.1.1"
+  }
+}

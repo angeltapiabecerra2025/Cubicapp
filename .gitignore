@@ -32,3 +32,5 @@ yarn-error.log*
 # Project specific
 .gemini/
 .agent/
+*.zip
+node-v*/
