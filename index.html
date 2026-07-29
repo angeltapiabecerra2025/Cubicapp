@@ -10946,6 +10946,8 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
             const [selectedPlanningProject, setSelectedPlanningProject] = useState('');
             const [itemizadosPorProyecto, setItemizadosPorProyecto] = useLocalStorageState('app_itemizados', {});
             const [itemizadosObraPorProyecto, setItemizadosObraPorProyecto] = useLocalStorageState('app_itemizados_obra', {});
+            const [caneriasInternas, setCaneriasInternas] = useLocalStorageState('app_canerias', []);
+            const [formCaneria, setFormCaneria] = useState({ id: null, nombre: '', desc: '' });
             const [programasPorProyecto, setProgramasPorProyecto] = useLocalStorageState('app_programas_obra', {});
             const [matrizMCMappings, setMatrizMCMappings] = useState({});
             const [selectedMatrizProject, setSelectedMatrizProject] = useState('');
@@ -11389,6 +11391,24 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                 setTimeout(() => setSuccessMsg({ show: false, text: '' }), 3000);
             };
 
+            
+            const handleSaveCaneria = () => {
+                if (!formCaneria.nombre.trim()) return alert('El nombre es requerido');
+                if (formCaneria.id) {
+                    setCaneriasInternas(prev => prev.map(c => c.id === formCaneria.id ? formCaneria : c));
+                } else {
+                    setCaneriasInternas(prev => [...prev, { ...formCaneria, id: Date.now() }]);
+                }
+                setFormCaneria({ id: null, nombre: '', desc: '' });
+                setShowForm(false);
+            };
+
+            const handleDeleteCaneria = (id) => {
+                if (confirm('Â¿Seguro que deseas eliminar esta caÃ±erÃ­a?')) {
+                    setCaneriasInternas(prev => prev.filter(c => c.id !== id));
+                }
+            };
+            
             const handleSaveEsp = () => {
                 const isEdit = formEsp.id !== null;
                 askConfirm(isEdit ? 'Confirmar Modificación' : 'Confirmar Registro',
