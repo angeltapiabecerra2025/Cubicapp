@@ -4918,14 +4918,14 @@
                                             <th class="p-2 w-48 bg-slate-50 text-slate-700 text-[9px]" rowSpan={2}>Actividad / Partida</th>
                                             <th class="p-2 w-28 bg-slate-50 text-slate-700 text-[9px]" rowSpan={2}>Unidad</th>
 
-                                            <th class="p-2 bg-emerald-900/40 text-emerald-100 text-[9px]" style={{width: `${maxMathParams * 80}px`}} rowSpan={2}>Parámetros</th>
-                                            <th class="p-2 w-16 bg-emerald-900/40 text-emerald-100 text-[9px]" rowSpan={2}>Cant.</th>
-                                            <th class="p-2 w-28 bg-emerald-800 text-white font-black text-[9px]" rowSpan={2}>TOTAL</th>
+                                            <th class="p-2 bg-slate-50 text-slate-700 text-[9px]" style={{width: `${maxMathParams * 80}px`}} rowSpan={2}>Parámetros</th>
+                                            <th class="p-2 w-16 bg-slate-50 text-slate-700 text-[9px]" rowSpan={2}>Cant.</th>
+                                            <th class="p-2 w-28 bg-slate-50 text-slate-700 font-black text-[9px]" rowSpan={2}>TOTAL</th>
                                             {activeTab === 'fisico' && (
-                                                <th class="p-2 w-32 bg-blue-900 text-white font-black text-[9px]" rowSpan={2}>PROGRAMA</th>
+                                                <th class="p-2 w-32 bg-slate-50 text-slate-700 font-black text-[9px]" rowSpan={2}>PROGRAMA</th>
                                             )}
 
-                                            <th class={`p-0 ${activeTab === 'fisico' ? 'bg-red-600' : 'bg-slate-300'} text-slate-800 font-black text-[9px] transition-colors duration-300`} colSpan={effectiveMaxSubs} style={{ width: `${effectiveMaxSubs * 140}px`, minWidth: `${effectiveMaxSubs * 140}px` }}>
+                                            <th class={`p-0 ${activeTab === 'fisico' ? 'bg-slate-50' : 'bg-slate-50'} text-slate-700 font-black text-[9px] transition-colors duration-300`} colSpan={effectiveMaxSubs} style={{ width: `${effectiveMaxSubs * 140}px`, minWidth: `${effectiveMaxSubs * 140}px` }}>
                                                 <div class="flex items-center justify-between px-3 py-1.5">
                                                     <span>Avance Sub-Actividades ({activeTab === 'fisico' ? 'FÍSICO' : 'EDP'})</span>
                                                     {activeActivityFilter && (() => {
@@ -4934,8 +4934,8 @@
                                                             <button
                                                                 class={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold transition-all shadow-lg cursor-pointer
                                                                     ${activeTab === 'fisico'
-                                                                        ? 'bg-white/10 hover:bg-white/25 text-white border border-white/30 hover:border-white/60'
-                                                                        : 'bg-white/10 hover:bg-white/25 text-white border border-white/30 hover:border-white/60'}`}
+                                                                        ? 'bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-300 hover:border-slate-400'
+                                                                        : 'bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-300 hover:border-slate-400'}`}
                                                                 onClick={() => addSubActivityDirectly(act.id)}
                                                                 title="Agregar nueva sub-actividad al final (luego arrastra para reordenar)"
                                                             >
@@ -4950,16 +4950,16 @@
                                             {isEDP_view ? (
                                                 <>
                                                     <th class="p-2 w-20 bg-slate-50 text-slate-700 font-black text-[8px] leading-tight" rowSpan={2}>AVANCE<br/>EDP</th>
-                                                    <th class="p-2 w-24 bg-fuchsia-800 text-white font-black text-[8px] leading-tight" rowSpan={2}>% AVANCE<br/>EDP</th>
+                                                    <th class="p-2 w-24 bg-slate-50 text-slate-700 font-black text-[8px] leading-tight" rowSpan={2}>% AVANCE<br/>EDP</th>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <th class="p-2 w-20 bg-slate-50 text-slate-700 font-black text-[8px] leading-tight border-l border-slate-700" rowSpan={2}>AVANCE<br/>FÍSICO</th>
-                                                    <th class="p-2 w-24 bg-teal-900 text-white font-black text-[8px] leading-tight" rowSpan={2}>% AVANCE<br/>FÍSICO</th>
+                                                    <th class="p-2 w-20 bg-slate-50 text-slate-700 font-black text-[8px] leading-tight border-l border-slate-200" rowSpan={2}>AVANCE<br/>FÍSICO</th>
+                                                    <th class="p-2 w-24 bg-slate-50 text-slate-700 font-black text-[8px] leading-tight" rowSpan={2}>% AVANCE<br/>FÍSICO</th>
                                                 </>
                                             )}
                                         </tr>
-                                        <tr class="text-[8px] uppercase font-black text-center divide-x divide-slate-200 bg-slate-800">
+                                        <tr class="text-[8px] uppercase font-black text-center divide-x divide-slate-200 bg-slate-50">
                                             {(() => {
                                                 const isEDP = activeTab === 'edp';
                                                 
@@ -4978,8 +4978,8 @@
                                                             return (
                                                                 <th
                                                                     key={sub.id}
-                                                                    class={`p-1 min-w-[140px] shadow-inner group transition-all duration-150 cursor-move hover:bg-slate-800
-                                                                        ${activeTab === 'fisico' ? 'bg-slate-900' : 'bg-slate-900'}`}
+                                                                    class={`p-1 min-w-[140px] shadow-inner group transition-all duration-150 cursor-move hover:bg-slate-200
+                                                                        ${activeTab === 'fisico' ? 'bg-slate-50' : 'bg-slate-50'}`}
                                                                     draggable="true"
                                                                     onDragStart={(e) => {
                                                                         e.dataTransfer.setData('subRealIdx', realIdx.toString());
@@ -7220,12 +7220,12 @@
                                             <th class="p-2 w-48 bg-slate-50 text-slate-700 text-[9px]" rowSpan={2}>Actividad / Partida</th>
                                             <th class="p-2 w-28 bg-slate-50 text-slate-700 text-[9px]" rowSpan={2}>Unidad</th>
 
-                                            <th class="p-2 bg-emerald-900/40 text-emerald-100 text-[9px]" style={{width: `${maxMathParams * 80}px`}} rowSpan={2}>Parámetros</th>
-                                            <th class="p-2 w-16 bg-emerald-900/40 text-emerald-100 text-[9px]" rowSpan={2}>Cant.</th>
-                                            <th class="p-2 w-28 bg-emerald-800 text-white font-black text-[9px]" rowSpan={2}>TOTAL</th>
+                                            <th class="p-2 bg-slate-50 text-slate-700 text-[9px]" style={{width: `${maxMathParams * 80}px`}} rowSpan={2}>Parámetros</th>
+                                            <th class="p-2 w-16 bg-slate-50 text-slate-700 text-[9px]" rowSpan={2}>Cant.</th>
+                                            <th class="p-2 w-28 bg-slate-50 text-slate-700 font-black text-[9px]" rowSpan={2}>TOTAL</th>
                                             <th class="p-2 w-48 bg-slate-50 text-slate-700 font-black text-[9px]" rowSpan={2}>PROGRAMA (ITEMIZADO)</th>
 
-                                            <th class={`p-0 ${activeTab === 'fisico' ? 'bg-red-600' : 'bg-slate-300'} text-slate-800 font-black text-[9px] transition-colors duration-300`} colSpan={effectiveMaxSubs} style={{ width: `${effectiveMaxSubs * 140}px`, minWidth: `${effectiveMaxSubs * 140}px` }}>
+                                            <th class={`p-0 ${activeTab === 'fisico' ? 'bg-slate-50' : 'bg-slate-50'} text-slate-700 font-black text-[9px] transition-colors duration-300`} colSpan={effectiveMaxSubs} style={{ width: `${effectiveMaxSubs * 140}px`, minWidth: `${effectiveMaxSubs * 140}px` }}>
                                                 <div class="flex items-center justify-between px-3 py-1.5">
                                                     <span>Avance Sub-Actividades ({activeTab === 'fisico' ? 'FÍSICO' : 'EDP'})</span>
                                                     {activeActivityFilter && (() => {
@@ -7234,8 +7234,8 @@
                                                             <button
                                                                 class={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold transition-all shadow-lg cursor-pointer
                                                                     ${activeTab === 'fisico'
-                                                                        ? 'bg-white/10 hover:bg-white/25 text-white border border-white/30 hover:border-white/60'
-                                                                        : 'bg-white/10 hover:bg-white/25 text-white border border-white/30 hover:border-white/60'}`}
+                                                                        ? 'bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-300 hover:border-slate-400'
+                                                                        : 'bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-300 hover:border-slate-400'}`}
                                                                 onClick={() => addSubActivityDirectly(act.id)}
                                                                 title="Agregar nueva sub-actividad al final (luego arrastra para reordenar)"
                                                             >
@@ -7250,16 +7250,16 @@
                                             {isEDP_view ? (
                                                 <>
                                                     <th class="p-2 w-20 bg-slate-50 text-slate-700 font-black text-[8px] leading-tight" rowSpan={2}>AVANCE<br/>EDP</th>
-                                                    <th class="p-2 w-24 bg-fuchsia-800 text-white font-black text-[8px] leading-tight" rowSpan={2}>% AVANCE<br/>EDP</th>
+                                                    <th class="p-2 w-24 bg-slate-50 text-slate-700 font-black text-[8px] leading-tight" rowSpan={2}>% AVANCE<br/>EDP</th>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <th class="p-2 w-20 bg-slate-50 text-slate-700 font-black text-[8px] leading-tight border-l border-slate-700" rowSpan={2}>AVANCE<br/>FÍSICO</th>
-                                                    <th class="p-2 w-24 bg-teal-900 text-white font-black text-[8px] leading-tight" rowSpan={2}>% AVANCE<br/>FÍSICO</th>
+                                                    <th class="p-2 w-20 bg-slate-50 text-slate-700 font-black text-[8px] leading-tight border-l border-slate-200" rowSpan={2}>AVANCE<br/>FÍSICO</th>
+                                                    <th class="p-2 w-24 bg-slate-50 text-slate-700 font-black text-[8px] leading-tight" rowSpan={2}>% AVANCE<br/>FÍSICO</th>
                                                 </>
                                             )}
                                         </tr>
-                                        <tr class="text-[8px] uppercase font-black text-center divide-x divide-slate-200 bg-slate-800">
+                                        <tr class="text-[8px] uppercase font-black text-center divide-x divide-slate-200 bg-slate-50">
                                             {(() => {
                                                 const isEDP = activeTab === 'edp';
                                                 
@@ -7278,8 +7278,8 @@
                                                             return (
                                                                 <th
                                                                     key={sub.id}
-                                                                    class={`p-1 min-w-[140px] shadow-inner group transition-all duration-150 cursor-move hover:bg-slate-800
-                                                                        ${activeTab === 'fisico' ? 'bg-slate-900' : 'bg-slate-900'}`}
+                                                                    class={`p-1 min-w-[140px] shadow-inner group transition-all duration-150 cursor-move hover:bg-slate-200
+                                                                        ${activeTab === 'fisico' ? 'bg-slate-50' : 'bg-slate-50'}`}
                                                                     draggable="true"
                                                                     onDragStart={(e) => {
                                                                         e.dataTransfer.setData('subRealIdx', realIdx.toString());
@@ -12449,11 +12449,11 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                                                 El modelo 3D interactivo se cargará aquí. Seleccione una obra para visualizar sus elementos en tiempo real.
                                             </p>
                                             <div class="mt-8 flex gap-4 relative z-10">
-                                                <div class="bg-slate-800/80 backdrop-blur border border-slate-700 px-4 py-2 rounded-xl text-center">
+                                                <div class="bg-slate-800/80 backdrop-blur border border-slate-200 px-4 py-2 rounded-xl text-center">
                                                     <p class="text-[10px] font-black text-slate-400 uppercase">Elementos</p>
                                                     <p class="text-lg font-bold text-white">{(bimElementosPorObra[bimSelectedObra] || []).length}</p>
                                                 </div>
-                                                <div class="bg-slate-800/80 backdrop-blur border border-slate-700 px-4 py-2 rounded-xl text-center">
+                                                <div class="bg-slate-800/80 backdrop-blur border border-slate-200 px-4 py-2 rounded-xl text-center">
                                                     <p class="text-[10px] font-black text-slate-400 uppercase">Estado</p>
                                                     <p class="text-lg font-bold text-emerald-400">Listo</p>
                                                 </div>
@@ -14073,11 +14073,11 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                                                     El modelo 3D interactivo se cargará aquí. Seleccione una obra para visualizar sus elementos en tiempo real.
                                                 </p>
                                                 <div class="mt-8 flex gap-4 relative z-10">
-                                                    <div class="bg-slate-800/80 backdrop-blur border border-slate-700 px-4 py-2 rounded-xl text-center">
+                                                    <div class="bg-slate-800/80 backdrop-blur border border-slate-200 px-4 py-2 rounded-xl text-center">
                                                         <p class="text-[10px] font-black text-slate-400 uppercase">Elementos</p>
                                                         <p class="text-lg font-bold text-white">{(bimElementosPorObra[bimSelectedObra] || []).length}</p>
                                                     </div>
-                                                    <div class="bg-slate-800/80 backdrop-blur border border-slate-700 px-4 py-2 rounded-xl text-center">
+                                                    <div class="bg-slate-800/80 backdrop-blur border border-slate-200 px-4 py-2 rounded-xl text-center">
                                                         <p class="text-[10px] font-black text-slate-400 uppercase">Estado</p>
                                                         <p class="text-lg font-bold text-emerald-400">Listo</p>
                                                     </div>
