@@ -12443,22 +12443,7 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                                                     </table>
                                                 </div>
                                             )}
-                                        </div>         <tr><td colSpan="3" class="p-8 text-center text-slate-400">No hay caÃ±erÃ­as registradas.</td></tr>
-                                                            ) : (
-                                                                caneriasInternas.map(c => (
-                                                                    <tr key={c.id} class="hover:bg-slate-50 transition-colors">
-                                                                        <td class="p-4 px-6 text-sm font-bold text-slate-800">{c.nombre}</td>
-                                                                        <td class="p-4 px-6 text-sm text-slate-500">{c.desc}</td>
-                                                                        <td class="p-4 px-6 text-right space-x-3">
-                                                                            <button class="text-blue-600 hover:text-blue-800 text-sm" onClick={() => { setShowForm(true); setFormCaneria(c); }}>âœï¸ Editar</button>
-                                                                            <button class="text-red-500 hover:text-red-700 text-sm" onClick={() => handleDeleteCaneria(c.id)}>ðŸ—‘ï¸ Eliminar</button>
-                                                                        </td>
-                                                                    </tr>
-                                                                ))
-                                                            )}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
+                                        </div>
                                             )}
                                         </div>
                                     ) : (
@@ -14400,4 +14385,3 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
 </body>
 
 </html>
-
