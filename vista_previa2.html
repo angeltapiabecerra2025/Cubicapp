@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -12386,42 +12386,26 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in">
                                             {[
                                                 { title: 'Usuarios', desc: 'Gestión de cuentas', special: 'Usuarios' },
-                                                { title: 'Roles', desc: 'Permisos dinámicos', special: 'Roles' },
-                                                { title: 'Actividades', desc: 'Estructuras, Acero, etc.', special: 'Actividades' },
-                                                { title: 'Especialidades', desc: 'Electricidad, Clima, etc.', special: 'Especialidades' },
-                                                { title: 'Unidades de Medida', desc: 'Fórmulas y Parámetros', special: 'Unidades' },
-                                                { title: 'Partidas de Obra', desc: 'Configuración inicial de obras.', special: 'Partidas' },
-                                                { title: 'Proyectos', desc: 'Configuración inicial de obras.', special: 'Proyectos' }
-                                            ].map(item => (
-                                                <div key={item.title} class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                                                    <h4 class="font-bold text-slate-800">{item.title}</h4>
-                                                    <p class="text-sm text-slate-500 mt-1 mb-4">{item.desc}</p>
-                                                    <button class="text-blue-600 text-xs font-bold uppercase tracking-wider hover:underline" onClick={() => { if (item.special) { setPage(item.special); setShowForm(false); } }}>
-                                                        Gestionar
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : mantenedoresTab === 'caneria' ? (
+                                                                     ) : mantenedoresTab === 'caneria' ? (
                                         <div class="space-y-6 animate-in fade-in">
                                             <div class="flex justify-between items-center">
-                                                <h2 class="text-xl font-bold text-slate-800">Mantenedor de CaÃ±erÃ­as</h2>
+                                                <h2 class="text-xl font-bold text-slate-800">Mantenedor de Cañerías</h2>
                                                 {!showForm && (
                                                     <button class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2" onClick={() => { setShowForm(true); setFormCaneria({ id: null, nombre: '', desc: '' }); }}>
-                                                        <span>âŠ•</span> Nueva CaÃ±erÃ­a
+                                                        <Icon name="plus" /> Nueva Cañería
                                                     </button>
                                                 )}
                                             </div>
                                             {showForm ? (
                                                 <div class="bg-white rounded-xl border border-blue-200 shadow-xl p-8 animate-in zoom-in-95 duration-200">
-                                                    <h3 class="font-bold text-lg mb-6 text-slate-800 border-b pb-4">{formCaneria.id ? 'Editar CaÃ±erÃ­a' : 'Nueva CaÃ±erÃ­a'}</h3>
+                                                    <h3 class="font-bold text-lg mb-6 text-slate-800 border-b pb-4">{formCaneria.id ? 'Editar Cañería' : 'Nueva Cañería'}</h3>
                                                     <div class="space-y-4 mb-8">
                                                         <div>
                                                             <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Nombre</label>
-                                                            <input class="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={formCaneria.nombre} onChange={e => setFormCaneria({ ...formCaneria, nombre: e.target.value })} placeholder="Ej: CaÃ±erÃ­a Acero CarbÃ³n 10''" />
+                                                            <input class="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={formCaneria.nombre} onChange={e => setFormCaneria({ ...formCaneria, nombre: e.target.value })} placeholder="Ej: Cañería Acero Carbón 10''" />
                                                         </div>
                                                         <div>
-                                                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">DescripciÃ³n</label>
+                                                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Descripción</label>
                                                             <textarea class="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none" rows="3" value={formCaneria.desc} onChange={e => setFormCaneria({ ...formCaneria, desc: e.target.value })} placeholder="Breve detalle..." />
                                                         </div>
                                                     </div>
@@ -12435,14 +12419,31 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                                                     <table class="w-full text-left">
                                                         <thead class="bg-slate-50 border-b border-slate-100">
                                                             <tr>
-                                                                <th class="p-4 text-[10px] font-bold text-slate-500 uppercase px-6">CaÃ±erÃ­a</th>
-                                                                <th class="p-4 text-[10px] font-bold text-slate-500 uppercase px-6">DescripciÃ³n</th>
+                                                                <th class="p-4 text-[10px] font-bold text-slate-500 uppercase px-6">Cañería</th>
+                                                                <th class="p-4 text-[10px] font-bold text-slate-500 uppercase px-6">Descripción</th>
                                                                 <th class="p-4 text-[10px] font-bold text-slate-500 uppercase px-6 text-right">Acciones</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody class="divide-y divide-slate-50">
                                                             {caneriasInternas.length === 0 ? (
-                                                                <tr><td colSpan="3" class="p-8 text-center text-slate-400">No hay caÃ±erÃ­as registradas.</td></tr>
+                                                                <tr><td colSpan="3" class="p-8 text-center text-slate-400">No hay cañerías registradas.</td></tr>
+                                                            ) : (
+                                                                caneriasInternas.map(c => (
+                                                                    <tr key={c.id} class="hover:bg-slate-50 transition-colors">
+                                                                        <td class="p-4 px-6 text-sm font-bold text-slate-800">{c.nombre}</td>
+                                                                        <td class="p-4 px-6 text-sm text-slate-500">{c.desc}</td>
+                                                                        <td class="p-4 px-6 text-right space-x-3">
+                                                                            <button class="text-blue-600 hover:text-blue-800 text-sm" onClick={() => { setShowForm(true); setFormCaneria(c); }}><Icon name="edit" /></button>
+                                                                            <button class="text-red-500 hover:text-red-700 text-sm" onClick={() => handleDeleteCaneria(c.id)}><Icon name="delete" /></button>
+                                                                        </td>
+                                                                    </tr>
+                                                                ))
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </div>         <tr><td colSpan="3" class="p-8 text-center text-slate-400">No hay caÃ±erÃ­as registradas.</td></tr>
                                                             ) : (
                                                                 caneriasInternas.map(c => (
                                                                     <tr key={c.id} class="hover:bg-slate-50 transition-colors">
