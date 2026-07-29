@@ -12385,8 +12385,24 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                                     {mantenedoresTab === 'estandar' ? (
                                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in">
                                             {[
-                                                { title: 'Usuarios', desc: 'Gestión de cuentas', special: 'Usuarios' },
-                                                                     ) : mantenedoresTab === 'caneria' ? (
+                                                                                                { title: 'Usuarios', desc: 'GestiÃ³n de cuentas', special: 'Usuarios' },
+                                                { title: 'Roles', desc: 'Permisos dinÃ¡micos', special: 'Roles' },
+                                                { title: 'Actividades', desc: 'Estructuras, Acero, etc.', special: 'Actividades' },
+                                                { title: 'Especialidades', desc: 'Electricidad, Clima, etc.', special: 'Especialidades' },
+                                                { title: 'Unidades de Medida', desc: 'FÃ³rmulas y ParÃ¡metros', special: 'Unidades' },
+                                                { title: 'Partidas de Obra', desc: 'ConfiguraciÃ³n inicial de obras.', special: 'Partidas' },
+                                                { title: 'Proyectos', desc: 'ConfiguraciÃ³n inicial de obras.', special: 'Proyectos' }
+                                            ].map(item => (
+                                                <div key={item.title} class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                                    <h4 class="font-bold text-slate-800">{item.title}</h4>
+                                                    <p class="text-sm text-slate-500 mt-1 mb-4">{item.desc}</p>
+                                                    <button class="text-blue-600 text-xs font-bold uppercase tracking-wider hover:underline" onClick={() => { if (item.special) { setPage(item.special); setShowForm(false); } }}>
+                                                        Gestionar
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : mantenedoresTab === 'caneria' ? (
                                         <div class="space-y-6 animate-in fade-in">
                                             <div class="flex justify-between items-center">
                                                 <h2 class="text-xl font-bold text-slate-800">Mantenedor de Cañerías</h2>

@@ -3,11 +3,6 @@ $files = @("index.html", "vista_previa2.html")
 foreach ($file in $files) {
     $content = Get-Content -Path $file -Raw -Encoding UTF8
     
-    $search = "                                                 { title: 'Usuarios', desc: 'Gestión de cuentas', special: 'Usuarios' },`r`n                                                                      ) : mantenedoresTab === 'caneria' ? ("
-    
-    # Wait, the indentation might be slightly different. Let's build a regex that is flexible on whitespace.
-    # Actually, string replacement in PowerShell is exact. Let's just find the index of "Gestión de cuentas" and the index of "mantenedoresTab === 'caneria' ? ("
-    
     $idx1 = $content.IndexOf("{ title: 'Usuarios'")
     $idx2 = $content.IndexOf(") : mantenedoresTab === 'caneria' ? (", $idx1)
     
@@ -33,7 +28,7 @@ foreach ($file in $files) {
                                                 </div>
                                             ))}
                                         </div>
-                                    "@
+"@
         
         $newContent = $before + $missing + "`r`n                                    " + $after
         
