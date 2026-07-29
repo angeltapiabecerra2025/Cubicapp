@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -12376,6 +12376,10 @@ const EstadoDePagoPage = ({ proyectos, askConfirm, showSuccess, itemizadosPorPro
                                             class={`px-6 py-2 rounded-lg text-xs font-black transition-all ${mantenedoresTab === 'obra' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
                                             onClick={() => setMantenedoresTab('obra')}
                                         >MANTENEDORES POR OBRA</button>
+                                        <button
+                                            class={`px-6 py-2 rounded-lg text-xs font-black transition-all ${mantenedoresTab === 'caneria' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+                                            onClick={() => setMantenedoresTab('caneria')}
+                                        >MANTENEDOR CAÑERÍA</button>
                                     </div>
                                     
                                     {mantenedoresTab === 'estandar' ? (
